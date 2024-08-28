@@ -233,16 +233,16 @@ class ArrayList {
 
   void push_back(const Type& value) {
     ensure_size_for_elements(1_UZ);
-    raw_push_back(current_++, value);
+    raw_push_back(value);
   }
   void push_back(Type&& value) {
     ensure_size_for_elements(1_UZ);
-    raw_push_back(current_++, std::move(value));
+    raw_push_back(std::move(value));
   }
   template <typename... Args>
   void emplace_back(Args&&... args) {
     ensure_size_for_elements(1_UZ);
-    raw_emplace_back(current_++, std::forward<Args>(args)...);
+    raw_emplace_back(std::forward<Args>(args)...);
   }
 
   constexpr void pop_back() {
@@ -379,13 +379,24 @@ class ArrayList {
   void grow_capacity() { set_capacity((end_ - data_) * GrowthFactor); }
 
   template <typename... Args>
-  constexpr void raw_emplace_back(value_type* const my_ptr, Args&&... args) {
+  constexpr void raw_emplace_back(Args&&... args) {
+    raw_emplace_into(current_++, std::forward<Args>(args)...);
+  }
+  constexpr void raw_push_back(const Type& value) {
+    raw_push_into(current_++, value);
+  }
+  constexpr void raw_push_back(Type&& value) {
+    raw_push_into(current_++, std::move(value));
+  }
+
+  template <typename... Args>
+  constexpr void raw_emplace_into(value_type* const my_ptr, Args&&... args) {
     *my_ptr = Type(std::forward<Args>(args)...);
   }
-  constexpr void raw_push_back(value_type* const my_ptr, const Type& value) {
+  constexpr void raw_push_into(value_type* const my_ptr, const Type& value) {
     *my_ptr = value;
   }
-  constexpr void raw_push_back(value_type* const my_ptr, Type&& value) {
+  constexpr void raw_push_into(value_type* const my_ptr, Type&& value) {
     *my_ptr = std::move(value);
   }
 
