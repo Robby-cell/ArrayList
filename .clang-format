@@ -1,0 +1,13 @@
+---
+BasedOnStyle: Google
+AllowShortBlocksOnASingleLine: 'false'
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: 'false'
+DerivePointerAlignment: 'false'
+ExperimentalAutoDetectBinPacking: 'false'
+FixNamespaceComments: 'true'
+InsertBraces: 'true'
+PointerAlignment: Left
+
+SpaceBeforeParens: ControlStatementsExceptControlMacros
+StatementMacros: ['ABSTRACT']
