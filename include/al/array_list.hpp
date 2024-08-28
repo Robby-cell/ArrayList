@@ -331,6 +331,11 @@ class ArrayList {
     return current_;
   }
 
+  constexpr auto clear() noexcept -> void {
+    destruct_all_elements();
+    current_ = data_;
+  }
+
  private:
   constexpr void raw_set_capacity(const size_type capacity) {
     const auto length = size();
