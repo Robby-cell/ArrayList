@@ -6,7 +6,11 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace ghj {
+namespace al {
+
+consteval inline auto operator""_UZ(const unsigned long long value) -> size_t {
+  return static_cast<size_t>(value);
+}
 
 namespace detail {
 
@@ -60,7 +64,7 @@ constexpr auto get_unwrapped(Iter&& it) noexcept(
 template <typename Type, typename Allocator = std::allocator<Type>>
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
 class ArrayList {
-  static constexpr inline auto GrowthFactor = 2UZ;
+  static constexpr inline auto GrowthFactor = 2_UZ;
 
  public:
   // NOLINTBEGIN
@@ -167,7 +171,7 @@ class ArrayList {
   static inline allocator my_allocator;
 
  public:
-  constexpr explicit ArrayList(const size_type capacity = 8UZ)
+  constexpr explicit ArrayList(const size_type capacity = 8_UZ)
       : data_(allocator_traits::allocate(my_allocator, capacity)) {
     end_ = data_ + capacity;
     current_ = data_;
@@ -228,16 +232,16 @@ class ArrayList {
   }
 
   void push_back(const Type& value) {
-    ensure_size_for_elements(1UZ);
+    ensure_size_for_elements(1_UZ);
     raw_push_back(current_++, value);
   }
   void push_back(Type&& value) {
-    ensure_size_for_elements(1UZ);
+    ensure_size_for_elements(1_UZ);
     raw_push_back(current_++, std::move(value));
   }
   template <typename... Args>
   void emplace_back(Args&&... args) {
-    ensure_size_for_elements(1UZ);
+    ensure_size_for_elements(1_UZ);
     raw_emplace_back(current_++, std::forward<Args>(args)...);
   }
 
@@ -345,7 +349,7 @@ class ArrayList {
     const auto length = other.size();
     set_capacity(length);
     current_ = data_ + length;
-    for (auto i = 0UZ; i < length; ++i) {
+    for (auto i = 0_UZ; i < length; ++i) {
       data_[i] = other.data_[i];
     }
   }
@@ -357,7 +361,7 @@ class ArrayList {
   }
 
   constexpr void ensure_not_empty() const {
-    if (size() <= 0UZ or data_ == nullptr) {
+    if (size() <= 0_UZ or data_ == nullptr) {
       throw std::out_of_range("ArrayList is empty");
     }
   }
@@ -400,6 +404,6 @@ class ArrayList {
   pointer current_;
 };
 
-}  // namespace ghj
+}  // namespace al
 
 #endif  // ARRAY_LIST_HPP

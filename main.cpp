@@ -2,7 +2,7 @@
 #include <iostream>
 #include <utility>
 
-#include "array_list.hpp"
+#include "al/array_list.hpp"
 
 template <typename Type>
 class LinkedList;
@@ -143,7 +143,7 @@ auto operator<<(std::ostream& os,
 }
 
 auto main() -> int {
-  ghj::ArrayList<int> n{1, 2, 4, 7, 8, 12};
+  al::ArrayList<int> n{1, 2, 4, 7, 8, 12};
   for (const auto& num : n) {
     std::cerr << num << '\n';
   }
