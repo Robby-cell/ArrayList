@@ -147,6 +147,12 @@ auto main() -> int {
   for (const auto& num : n) {
     std::cerr << num << '\n';
   }
+  auto m = std::move(n);
+  std::cerr << "n.size(): " << n.size() << '\n';
+  std::cerr << "m.size(): " << m.size() << '\n';
+  for (const auto& num : n) {
+    std::cerr << num << '\n';
+  }
 
   LinkedList<Foo> list{};
   list.push_back();

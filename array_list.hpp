@@ -187,16 +187,44 @@ class ArrayList {
     std::uninitialized_copy(ufirst, ulast, data_);
   }
 
-  constexpr ArrayList(std::initializer_list<Type> list)
+  constexpr ArrayList(std::initializer_list<Type> list,
+                      [[maybe_unused]] const allocator& alloc = allocator())
       : ArrayList(list.begin(), list.end()) {}
 
-  ~ArrayList() {
-    if constexpr (not std::is_trivially_destructible_v<Type>) {
-      for (auto& item : *this) {
-        item.~Type();
-      }
+  constexpr ArrayList(const ArrayList& other,
+                      [[maybe_unused]] const allocator& alloc = allocator())
+      : ArrayList(other.begin(), other.end(), alloc) {}
+  constexpr ArrayList(ArrayList&& other) noexcept
+      : data_(other.data_), end_(other.end_), current_(other.current_) {
+    other.data_ = nullptr;
+    other.end_ = nullptr;
+    other.current_ = nullptr;
+  }
+
+  constexpr auto operator=(const ArrayList& other) -> ArrayList& {
+    if (this != &other) {
+      copy_safe(other);
     }
-    allocator_traits::deallocate(my_allocator, data_, end_ - data_);
+    return *this;
+  }
+  constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
+    destruct_all_elements();
+    deallocate_ptr();
+
+    data_ = other.data_;
+    end_ = other.end_;
+    current_ = other.current_;
+
+    other.data_ = nullptr;
+    other.end_ = nullptr;
+    other.current_ = nullptr;
+
+    return *this;
+  }
+
+  ~ArrayList() {
+    destruct_all_elements();
+    deallocate_ptr();
   }
 
   void push_back(const Type& value) {
@@ -214,9 +242,7 @@ class ArrayList {
   }
 
   constexpr void pop_back() {
-    if (size() <= 0UZ) {
-      throw std::out_of_range("ArrayList is empty");
-    }
+    ensure_not_empty();
     --current_;
   }
 
@@ -224,35 +250,36 @@ class ArrayList {
     return current_ - data_;
   }
 
-  void set_capacity(const size_type capacity) {
-    auto new_data = allocator_traits::allocate(my_allocator, capacity);
-    const auto my_size = size();
-    std::uninitialized_copy(data_, current_, new_data);
-
-    allocator_traits::deallocate(my_allocator, data_, end_ - data_);
-    data_ = new_data;
-    end_ = new_data + capacity;
-    current_ = new_data + my_size;
+  void set_capacity(const size_type new_capacity) {
+    const auto cap = capacity();
+    const auto len = size();
+    const auto old_ptr = data_;
+    raw_set_capacity(new_capacity);
+    if (old_ptr) {
+      if (len > 0) {
+        std::uninitialized_copy(old_ptr, old_ptr + len, data_);
+      }
+      if (cap > 0) {
+        allocator_traits::deallocate(my_allocator, old_ptr, cap);
+      }
+    }
   }
 
-  [[nodiscard]] constexpr auto operator[](const size_type index) -> reference {
+  [[nodiscard]] constexpr auto operator[](const size_type index) noexcept
+      -> reference {
     return data_[index];
   }
-  [[nodiscard]] constexpr auto operator[](const size_type index) const
+  [[nodiscard]] constexpr auto operator[](const size_type index) const noexcept
       -> const_reference {
     return data_[index];
   }
   [[nodiscard]] constexpr auto at(const size_type index) -> reference {
-    if (index >= size()) {
-      throw std::out_of_range("Index out of range");
-    }
+    ensure_in_range(index);
     return data_[index];
   }
   [[nodiscard]] constexpr auto at(const size_type index) const
       -> const_reference {
-    if (index >= size()) {
-      throw std::out_of_range("Index out of range");
-    }
+    ensure_in_range(index);
     return data_[index];
   }
 
@@ -266,28 +293,20 @@ class ArrayList {
   }
 
   [[nodiscard]] constexpr auto front() -> reference {
-    if (size() <= 0UZ) {
-      throw std::out_of_range("ArrayList is empty");
-    }
+    ensure_not_empty();
     return *data_;
   }
   [[nodiscard]] constexpr auto front() const -> const_reference {
-    if (size() <= 0UZ) {
-      throw std::out_of_range("ArrayList is empty");
-    }
+    ensure_not_empty();
     return *data_;
   }
 
   [[nodiscard]] constexpr auto back() -> reference {
-    if (size() <= 0UZ) {
-      throw std::out_of_range("ArrayList is empty");
-    }
+    ensure_not_empty();
     return *(current_ - 1);
   }
   [[nodiscard]] constexpr auto back() const -> const_reference {
-    if (size() <= 0UZ) {
-      throw std::out_of_range("ArrayList is empty");
-    }
+    ensure_not_empty();
     return *(current_ - 1);
   }
 
@@ -309,6 +328,40 @@ class ArrayList {
   }
 
  private:
+  constexpr void raw_set_capacity(const size_type capacity) {
+    const auto length = size();
+    data_ = allocator_traits::allocate(my_allocator, capacity);
+    current_ = data_ + length;
+    end_ = data_ + capacity;
+  }
+
+  constexpr void copy_safe(const ArrayList& other) {
+    destruct_all_elements();
+    deallocate_ptr();
+    copy_unsafe(other);
+  }
+
+  constexpr void copy_unsafe(const ArrayList& other) {
+    const auto length = other.size();
+    set_capacity(length);
+    current_ = data_ + length;
+    for (auto i = 0UZ; i < length; ++i) {
+      data_[i] = other.data_[i];
+    }
+  }
+
+  constexpr void ensure_in_range(const size_type index) const {
+    if (index >= size() or data_ == nullptr) {
+      throw std::out_of_range("Index out of range");
+    }
+  }
+
+  constexpr void ensure_not_empty() const {
+    if (size() <= 0UZ or data_ == nullptr) {
+      throw std::out_of_range("ArrayList is empty");
+    }
+  }
+
   void ensure_size_for_elements(const size_type elements) {
     while ((current_ + elements) > end_) {
       grow_capacity();
@@ -325,6 +378,21 @@ class ArrayList {
   }
   constexpr void raw_push_back(value_type* const my_ptr, Type&& value) {
     *my_ptr = std::move(value);
+  }
+
+  constexpr void destruct_all_elements() {
+    if constexpr (not std::is_trivially_destructible_v<Type>) {
+      if (data_) {
+        for (auto& item : *this) {
+          item.~Type();
+        }
+      }
+    }
+  }
+  constexpr void deallocate_ptr() {
+    if (data_) {
+      allocator_traits::deallocate(my_allocator, data_, end_ - data_);
+    }
   }
 
   pointer data_;
