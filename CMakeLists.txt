@@ -10,3 +10,5 @@ include_directories(array_list_impl INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/inclu
 
 add_executable(array_list
   main.cpp)
+
+add_subdirectory(tests)

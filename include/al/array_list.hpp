@@ -116,6 +116,10 @@ class ArrayList {
                                      const Iterator& other) noexcept {
       return me.current_ != other.current_;
     }
+    friend constexpr auto operator==(const Iterator& me,
+                                     const Iterator& other) noexcept {
+      return me.current_ == other.current_;
+    }
 
    private:
     pointer current_;
@@ -156,6 +160,10 @@ class ArrayList {
                                      const ConstIterator& other) noexcept {
       return me.current_ != other.current_;
     }
+    friend constexpr auto operator==(const ConstIterator& me,
+                                     const ConstIterator& other) noexcept {
+      return me.current_ == other.current_;
+    }
 
    private:
     const_pointer current_;
@@ -167,10 +175,6 @@ class ArrayList {
   using const_iterator = ConstIterator;
   // NOLINTEND
 
- private:
-  static inline allocator my_allocator;
-
- public:
   constexpr explicit ArrayList(const size_type capacity = 8_UZ)
       : data_(allocator_traits::allocate(my_allocator, capacity)) {
     end_ = data_ + capacity;
@@ -230,6 +234,8 @@ class ArrayList {
     destruct_all_elements();
     deallocate_ptr();
   }
+
+  constexpr inline auto empty() const noexcept -> bool { return size() == 0; }
 
   void push_back(const Type& value) {
     ensure_size_for_elements(1_UZ);
@@ -418,6 +424,8 @@ class ArrayList {
   pointer data_;
   pointer end_;
   pointer current_;
+
+  static inline allocator my_allocator;
 };
 
 }  // namespace al
