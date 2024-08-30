@@ -1,6 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 #include <string>
-#include <utility>
 
 #include "al/array_list.hpp"
 
@@ -39,10 +38,10 @@ TEST_CASE("Iterators with non-trivial types") {
   static int x = 0;
   struct Foo {
     Foo() = default;
-    Foo& operator=(const Foo&) = delete;
+    auto operator=(const Foo&) -> Foo& = delete;
     Foo(const Foo&) = delete;
     Foo(Foo&& other) noexcept { other.counts = false; }
-    Foo& operator=(Foo&& other) noexcept {
+    auto operator=(Foo&& other) noexcept -> Foo& {
       other.counts = false;
       return *this;
     }
