@@ -65,13 +65,13 @@ constexpr auto get_unwrapped(Iter&& it) noexcept(
 
 template <typename Type, typename Allocator = std::allocator<Type>>
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
-class ArrayList {
+class ArrayList : private Allocator {
   static constexpr inline auto GrowthFactor = 2_UZ;
 
  public:
   // NOLINTBEGIN
-  using allocator = Allocator;
-  using allocator_traits = std::allocator_traits<allocator>;
+  using allocator_type = Allocator;
+  using allocator_traits = std::allocator_traits<allocator_type>;
   using value_type = std::remove_const_t<Type>;
   using pointer = value_type*;
   using const_pointer = const value_type*;
@@ -82,6 +82,9 @@ class ArrayList {
   // NOLINTEND
 
  private:
+  constexpr inline auto get_allocator() noexcept -> allocator_type& {
+    return static_cast<allocator_type&>(*this);
+  }
   struct Iterator {
    public:
     // NOLINTBEGIN
@@ -184,27 +187,29 @@ class ArrayList {
   // NOLINTEND
 
   constexpr explicit ArrayList(const size_type capacity = 8_UZ)
-      : data_(allocator_traits::allocate(my_allocator, capacity)) {
+      : data_(allocator_traits::allocate(get_allocator(), capacity)) {
     end_ = data_ + capacity;
     current_ = data_;
   }
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  constexpr ArrayList(Iter first, Iter last,
-                      [[maybe_unused]] const allocator& alloc = allocator()) {
+  constexpr ArrayList(
+      Iter first, Iter last,
+      [[maybe_unused]] const allocator_type& alloc = allocator_type()) {
     auto ufirst = detail::get_unwrapped(first);
     auto ulast = detail::get_unwrapped(last);
 
     const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
 
-    data_ = allocator_traits::allocate(my_allocator, length);
+    data_ = allocator_traits::allocate(get_allocator(), length);
     end_ = data_ + length;
     current_ = data_ + length;
 
     std::uninitialized_copy(ufirst, ulast, data_);
   }
 
-  constexpr ArrayList(std::initializer_list<Type> list,
-                      [[maybe_unused]] const allocator& alloc = allocator())
+  constexpr ArrayList(
+      std::initializer_list<Type> list,
+      [[maybe_unused]] const allocator_type& alloc = allocator_type())
       : ArrayList(list.begin(), list.end()) {}
 
   constexpr ArrayList(const ArrayList& other)
@@ -268,7 +273,7 @@ class ArrayList {
         // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
       }
       if (cap > 0) {
-        allocator_traits::deallocate(my_allocator, old_ptr, cap);
+        allocator_traits::deallocate(get_allocator(), old_ptr, cap);
       }
     }
   }
@@ -343,7 +348,7 @@ class ArrayList {
  private:
   constexpr void raw_set_capacity(const size_type capacity) {
     const auto length = size();
-    data_ = allocator_traits::allocate(my_allocator, capacity);
+    data_ = allocator_traits::allocate(get_allocator(), capacity);
     current_ = data_ + length;
     end_ = data_ + capacity;
   }
@@ -417,15 +422,13 @@ class ArrayList {
   }
   constexpr void deallocate_ptr() {
     if (data_) {
-      allocator_traits::deallocate(my_allocator, data_, end_ - data_);
+      allocator_traits::deallocate(get_allocator(), data_, end_ - data_);
     }
   }
 
   pointer data_;
   pointer end_;
   pointer current_;
-
-  static inline allocator my_allocator;
 };
 
 }  // namespace al
