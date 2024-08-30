@@ -1,3 +1,4 @@
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 
@@ -56,7 +57,11 @@ TEST_CASE("Iterators with non-trivial types") {
     REQUIRE(x == 0);
   }
 
-  REQUIRE(x == 2);
+  SECTION(
+      "Make sure no items are destroyed that haven't been constructed and "
+      "items that are constructed are destroyed") {
+    REQUIRE(x == 2);
+  }
 }
 
 TEST_CASE("Copy construction") {
@@ -77,4 +82,62 @@ TEST_CASE("Copy with non trivial types") {
   REQUIRE(copy.size() == 2);
   REQUIRE(copy.front() == "Hello");
   REQUIRE(copy.back() == "World");
+}
+
+TEST_CASE("Iterator push_back") {
+  al::ArrayList<int> list;
+  std::array<int, 10> values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  list.push_back(values.begin(), values.end());
+
+  REQUIRE(list.size() == 10);
+  REQUIRE(list.front() == 1);
+  REQUIRE(list.back() == 10);
+}
+
+TEST_CASE("Reserve") {
+  static int x = 0;
+  struct Foo {
+    ~Foo() { x++; }
+  };
+  {
+    constexpr size_t Capacity = 20U;
+
+    al::ArrayList<Foo> list;
+    list.reserve(Capacity);
+
+    REQUIRE(list.size() == 0);
+    REQUIRE(list.capacity() == Capacity);
+  }
+
+  SECTION("Make sure no items are destroyed that haven't been constructed") {
+    REQUIRE(x == 0);
+  }
+}
+
+TEST_CASE("Non trivial types in iterator push_back") {
+  static int x = 0;
+  struct Foo {
+    ~Foo() { x++; }
+  };
+
+  constexpr size_t Capacity = 20U;
+  {
+    std::array<Foo, Capacity> values;
+
+    al::ArrayList<Foo> list(Capacity);
+
+    REQUIRE(list.size() == 0);
+    REQUIRE(list.capacity() == Capacity);
+
+    list.push_back(values.begin(), values.end());
+
+    REQUIRE(list.size() == Capacity);
+    REQUIRE(list.capacity() == Capacity);
+  }
+
+  SECTION(
+      "Make sure items are destroyed, and their copys are destroyed, and no "
+      "more") {
+    REQUIRE(x == Capacity * 2);
+  }
 }
