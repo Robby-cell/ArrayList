@@ -240,9 +240,7 @@ class ArrayList : private Allocator {
     return *this;
   }
   constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
-    std::swap(data_, other.data_);
-    std::swap(end_, other.end_);
-    std::swap(current_, other.current_);
+    std::swap(*this, other);
 
     return *this;
   }
