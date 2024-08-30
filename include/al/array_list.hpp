@@ -11,6 +11,11 @@
 
 namespace al {
 
+#ifdef AL_NODISCARD
+#undef AL_NODISCARD
+#endif
+#define AL_NODISCARD [[nodiscard]]
+
 consteval inline auto operator""_UZ(const unsigned long long value) -> size_t {
   return static_cast<size_t>(value);
 }
@@ -83,7 +88,8 @@ class ArrayList : private Allocator {
   // NOLINTEND
 
  private:
-  constexpr inline auto get_allocator() noexcept -> allocator_type& {
+  AL_NODISCARD constexpr inline auto get_allocator() noexcept
+      -> allocator_type& {
     return static_cast<allocator_type&>(*this);
   }
   struct Iterator {
@@ -98,12 +104,16 @@ class ArrayList : private Allocator {
     constexpr Iterator(pointer current) : current_(current) {}
     constexpr Iterator(std::nullptr_t) : current_(nullptr) {}
 
-    constexpr operator const_pointer() const noexcept { return current_; }
-    constexpr operator pointer() noexcept { return current_; }
+    AL_NODISCARD constexpr operator const_pointer() const noexcept {
+      return current_;
+    }
+    AL_NODISCARD constexpr operator pointer() noexcept { return current_; }
     // NOLINTEND
 
-    constexpr auto operator*() noexcept -> reference { return *current_; }
-    constexpr auto operator*() const noexcept -> const_reference {
+    AL_NODISCARD constexpr auto operator*() noexcept -> reference {
+      return *current_;
+    }
+    AL_NODISCARD constexpr auto operator*() const noexcept -> const_reference {
       return *current_;
     }
     constexpr auto operator->() noexcept -> pointer { return current_; }
@@ -121,12 +131,12 @@ class ArrayList : private Allocator {
       return tmp;
     }
 
-    friend constexpr auto operator!=(const Iterator& me,
-                                     const Iterator& other) noexcept {
+    AL_NODISCARD friend constexpr auto operator!=(
+        const Iterator& me, const Iterator& other) noexcept {
       return me.current_ != other.current_;
     }
-    friend constexpr auto operator==(const Iterator& me,
-                                     const Iterator& other) noexcept {
+    AL_NODISCARD friend constexpr auto operator==(
+        const Iterator& me, const Iterator& other) noexcept {
       return me.current_ == other.current_;
     }
 
@@ -145,12 +155,16 @@ class ArrayList : private Allocator {
     constexpr ConstIterator(pointer current) : current_(current) {}
     constexpr ConstIterator(std::nullptr_t) : current_(nullptr) {}
 
-    constexpr operator const_pointer() const noexcept { return current_; }
-    constexpr operator pointer() noexcept { return current_; }
+    AL_NODISCARD constexpr operator const_pointer() const noexcept {
+      return current_;
+    }
+    AL_NODISCARD constexpr operator pointer() noexcept { return current_; }
     // NOLINTEND
 
-    constexpr auto operator*() noexcept -> const_reference { return *current_; }
-    constexpr auto operator*() const noexcept -> const_reference {
+    AL_NODISCARD constexpr auto operator*() noexcept -> const_reference {
+      return *current_;
+    }
+    AL_NODISCARD constexpr auto operator*() const noexcept -> const_reference {
       return *current_;
     }
     constexpr auto operator->() noexcept -> const_pointer { return current_; }
@@ -168,12 +182,12 @@ class ArrayList : private Allocator {
       return tmp;
     }
 
-    friend constexpr auto operator!=(const ConstIterator& me,
-                                     const ConstIterator& other) noexcept {
+    AL_NODISCARD friend constexpr auto operator!=(
+        const ConstIterator& me, const ConstIterator& other) noexcept {
       return me.current_ != other.current_;
     }
-    friend constexpr auto operator==(const ConstIterator& me,
-                                     const ConstIterator& other) noexcept {
+    AL_NODISCARD friend constexpr auto operator==(
+        const ConstIterator& me, const ConstIterator& other) noexcept {
       return me.current_ == other.current_;
     }
 
@@ -238,7 +252,9 @@ class ArrayList : private Allocator {
     deallocate_ptr();
   }
 
-  constexpr inline auto empty() const noexcept -> bool { return size() == 0; }
+  AL_NODISCARD constexpr inline auto empty() const noexcept -> bool {
+    return size() == 0;
+  }
 
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
   constexpr void push_back(Iter first, Iter last) {
@@ -271,7 +287,7 @@ class ArrayList : private Allocator {
     --current_;
   }
 
-  [[nodiscard]] constexpr auto size() const noexcept -> size_type {
+  AL_NODISCARD constexpr auto size() const noexcept -> size_type {
     return current_ - data_;
   }
 
@@ -298,65 +314,65 @@ class ArrayList : private Allocator {
     }
   }
 
-  [[nodiscard]] constexpr auto operator[](const size_type index) noexcept
+  AL_NODISCARD constexpr auto operator[](const size_type index) noexcept
       -> reference {
     return data_[index];
   }
-  [[nodiscard]] constexpr auto operator[](const size_type index) const noexcept
+  AL_NODISCARD constexpr auto operator[](const size_type index) const noexcept
       -> const_reference {
     return data_[index];
   }
-  [[nodiscard]] constexpr auto at(const size_type index) -> reference {
+  AL_NODISCARD constexpr auto at(const size_type index) -> reference {
     ensure_in_range(index);
     return data_[index];
   }
-  [[nodiscard]] constexpr auto at(const size_type index) const
+  AL_NODISCARD constexpr auto at(const size_type index) const
       -> const_reference {
     ensure_in_range(index);
     return data_[index];
   }
 
-  [[nodiscard]] constexpr auto capacity() const noexcept -> size_type {
+  AL_NODISCARD constexpr auto capacity() const noexcept -> size_type {
     return end_ - data_;
   }
 
-  [[nodiscard]] constexpr auto data() noexcept -> pointer { return data_; }
-  [[nodiscard]] constexpr auto data() const noexcept -> const_pointer {
+  AL_NODISCARD constexpr auto data() noexcept -> pointer { return data_; }
+  AL_NODISCARD constexpr auto data() const noexcept -> const_pointer {
     return data_;
   }
 
-  [[nodiscard]] constexpr auto front() -> reference {
+  AL_NODISCARD constexpr auto front() -> reference {
     ensure_not_empty();
     return *data_;
   }
-  [[nodiscard]] constexpr auto front() const -> const_reference {
+  AL_NODISCARD constexpr auto front() const -> const_reference {
     ensure_not_empty();
     return *data_;
   }
 
-  [[nodiscard]] constexpr auto back() -> reference {
+  AL_NODISCARD constexpr auto back() -> reference {
     ensure_not_empty();
     return *(current_ - 1);
   }
-  [[nodiscard]] constexpr auto back() const -> const_reference {
+  AL_NODISCARD constexpr auto back() const -> const_reference {
     ensure_not_empty();
     return *(current_ - 1);
   }
 
-  [[nodiscard]] constexpr auto begin() noexcept -> iterator { return data_; }
-  [[nodiscard]] constexpr auto end() noexcept -> iterator { return current_; }
-  [[nodiscard]] constexpr auto cbegin() noexcept -> iterator { return data_; }
-  [[nodiscard]] constexpr auto cend() noexcept -> iterator { return current_; }
-  [[nodiscard]] constexpr auto begin() const noexcept -> const_iterator {
+  AL_NODISCARD constexpr auto begin() noexcept -> iterator { return data_; }
+  AL_NODISCARD constexpr auto end() noexcept -> iterator { return current_; }
+  AL_NODISCARD constexpr auto cbegin() noexcept -> iterator { return data_; }
+  AL_NODISCARD constexpr auto cend() noexcept -> iterator { return current_; }
+  AL_NODISCARD constexpr auto begin() const noexcept -> const_iterator {
     return data_;
   }
-  [[nodiscard]] constexpr auto end() const noexcept -> const_iterator {
+  AL_NODISCARD constexpr auto end() const noexcept -> const_iterator {
     return current_;
   }
-  [[nodiscard]] constexpr auto cbegin() const noexcept -> const_iterator {
+  AL_NODISCARD constexpr auto cbegin() const noexcept -> const_iterator {
     return data_;
   }
-  [[nodiscard]] constexpr auto cend() const noexcept -> const_iterator {
+  AL_NODISCARD constexpr auto cend() const noexcept -> const_iterator {
     return current_;
   }
 
@@ -376,15 +392,16 @@ class ArrayList : private Allocator {
   constexpr void copy_safe(const ArrayList& other) {
     destruct_all_elements();
     deallocate_ptr();
+
+    reserve(other.size());
     copy_unsafe(other);
   }
 
   constexpr void copy_unsafe(const ArrayList& other) {
-    const auto length = other.size();
-    reserve(length);
+    const auto length{other.size()};
     current_ = data_ + length;
     for (auto i = 0_UZ; i < length; ++i) {
-      data_[i] = other.data_[i];
+      new (data_ + i) value_type(other.data_[i]);
     }
   }
 
