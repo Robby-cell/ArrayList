@@ -1,10 +1,12 @@
 #ifndef ARRAY_LIST_HPP
 #define ARRAY_LIST_HPP
 
+#include <cstring>
 #include <initializer_list>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
 
 namespace al {
 
@@ -91,6 +93,9 @@ class ArrayList {
 
     constexpr Iterator(pointer current) : current_(current) {}
     constexpr Iterator(std::nullptr_t) : current_(nullptr) {}
+
+    constexpr operator const_pointer() const noexcept { return current_; }
+    constexpr operator pointer() noexcept { return current_; }
     // NOLINTEND
 
     constexpr auto operator*() noexcept -> reference { return *current_; }
@@ -135,6 +140,9 @@ class ArrayList {
 
     constexpr ConstIterator(pointer current) : current_(current) {}
     constexpr ConstIterator(std::nullptr_t) : current_(nullptr) {}
+
+    constexpr operator const_pointer() const noexcept { return current_; }
+    constexpr operator pointer() noexcept { return current_; }
     // NOLINTEND
 
     constexpr auto operator*() noexcept -> const_reference { return *current_; }
@@ -146,11 +154,11 @@ class ArrayList {
       return current_;
     }
 
-    constexpr auto operator++() noexcept -> Iterator& {
+    constexpr auto operator++() noexcept -> ConstIterator& {
       ++current_;
       return *this;
     }
-    constexpr auto operator++(int) noexcept -> Iterator {
+    constexpr auto operator++(int) noexcept -> ConstIterator {
       auto tmp = *this;
       ++current_;
       return tmp;
@@ -199,14 +207,10 @@ class ArrayList {
                       [[maybe_unused]] const allocator& alloc = allocator())
       : ArrayList(list.begin(), list.end()) {}
 
-  constexpr ArrayList(const ArrayList& other,
-                      [[maybe_unused]] const allocator& alloc = allocator())
-      : ArrayList(other.begin(), other.end(), alloc) {}
-  constexpr ArrayList(ArrayList&& other) noexcept
-      : data_(other.data_), end_(other.end_), current_(other.current_) {
-    other.data_ = nullptr;
-    other.end_ = nullptr;
-    other.current_ = nullptr;
+  constexpr ArrayList(const ArrayList& other)
+      : ArrayList(other.begin(), other.end()) {}
+  constexpr ArrayList(ArrayList&& other) noexcept : ArrayList(0) {
+    std::swap(*this, other);
   }
 
   constexpr auto operator=(const ArrayList& other) -> ArrayList& {
@@ -216,16 +220,9 @@ class ArrayList {
     return *this;
   }
   constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
-    destruct_all_elements();
-    deallocate_ptr();
-
-    data_ = other.data_;
-    end_ = other.end_;
-    current_ = other.current_;
-
-    other.data_ = nullptr;
-    other.end_ = nullptr;
-    other.current_ = nullptr;
+    std::swap(data_, other.data_);
+    std::swap(end_, other.end_);
+    std::swap(current_, other.current_);
 
     return *this;
   }
@@ -267,7 +264,8 @@ class ArrayList {
     raw_set_capacity(new_capacity);
     if (old_ptr) {
       if (len > 0) {
-        std::uninitialized_copy(old_ptr, old_ptr + len, data_);
+        std::memcpy(data_, old_ptr, len * sizeof(Type));
+        // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
       }
       if (cap > 0) {
         allocator_traits::deallocate(my_allocator, old_ptr, cap);
@@ -397,13 +395,15 @@ class ArrayList {
 
   template <typename... Args>
   constexpr void raw_emplace_into(value_type* const my_ptr, Args&&... args) {
-    *my_ptr = Type(std::forward<Args>(args)...);
+    // *my_ptr = Type(std::forward<Args>(args)...);
+    new (my_ptr) value_type(std::forward<Args>(args)...);
   }
   constexpr void raw_push_into(value_type* const my_ptr, const Type& value) {
-    *my_ptr = value;
+    new (my_ptr) value_type(value);
   }
   constexpr void raw_push_into(value_type* const my_ptr, Type&& value) {
-    *my_ptr = std::move(value);
+    // *my_ptr = std::move(value);
+    new (my_ptr) value_type(std::move(value));
   }
 
   constexpr void destruct_all_elements() {
