@@ -230,7 +230,7 @@ class ArrayList : private Allocator {
   constexpr ArrayList(const ArrayList& other)
       : ArrayList(other.begin(), other.end()) {}
   constexpr ArrayList(ArrayList&& other) noexcept : ArrayList(0) {
-    std::swap(*this, other);
+    swap_with_other(other);
   }
 
   constexpr auto operator=(const ArrayList& other) -> ArrayList& {
@@ -240,7 +240,7 @@ class ArrayList : private Allocator {
     return *this;
   }
   constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
-    std::swap(*this, other);
+    swap_with_other(other);
 
     return *this;
   }
@@ -292,6 +292,13 @@ class ArrayList : private Allocator {
   }
 
   void resize(const size_type new_size) {
+    const auto len = size();
+    if (new_size < len) {
+      for (auto i = new_size; i < len; ++i) {
+        data_[i].~value_type();
+      }
+    }
+
     if (capacity() < new_size) {
       reserve(new_size);
     }
@@ -300,6 +307,10 @@ class ArrayList : private Allocator {
 
   void reserve(const size_type new_capacity) {
     const auto cap = capacity();
+    if (cap >= new_capacity) {
+      return;
+    }
+
     const auto len = size();
     const auto old_ptr = data_;
     raw_reserve(new_capacity);
@@ -309,11 +320,6 @@ class ArrayList : private Allocator {
         // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
       }
       if (cap > 0) {
-        if (new_capacity < len) {
-          for (auto i = new_capacity; i < len; ++i) {
-            old_ptr[i].~value_type();
-          }
-        }
         allocator_traits::deallocate(get_allocator(), old_ptr, cap);
       }
     }
@@ -466,6 +472,12 @@ class ArrayList : private Allocator {
     if (data_) {
       allocator_traits::deallocate(get_allocator(), data_, end_ - data_);
     }
+  }
+
+  constexpr void swap_with_other(ArrayList& other) {
+    std::swap(data_, other.data_);
+    std::swap(end_, other.end_);
+    std::swap(current_, other.current_);
   }
 
   pointer data_;
