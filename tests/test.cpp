@@ -161,12 +161,15 @@ TEST_CASE("Resizing correctly destroys items") {
 
     REQUIRE(list.capacity() == Capacity);
     REQUIRE(list.size() == Size);
-    REQUIRE(x == 2);
+    REQUIRE(x == 4);
 
     constexpr size_t NewSize = 10U;
     list.reserve(NewSize);
-    REQUIRE(list.capacity() == NewSize);
-    REQUIRE(list.size() == Size);
+
+    SECTION("We already have enough space, so need to reserve") {
+      REQUIRE(list.capacity() == Capacity);
+      REQUIRE(list.size() == Size);
+    }
   }
-  REQUIRE(x == 2);
+  REQUIRE(x == 4);
 }
