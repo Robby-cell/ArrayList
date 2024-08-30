@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
@@ -239,6 +240,18 @@ class ArrayList : private Allocator {
 
   constexpr inline auto empty() const noexcept -> bool { return size() == 0; }
 
+  template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
+  constexpr void push_back(Iter first, Iter last) {
+    auto ufirst = detail::get_unwrapped(first);
+    auto ulast = detail::get_unwrapped(last);
+
+    const auto length = std::distance(ufirst, ulast);
+    ensure_size_for_elements(length);
+
+    std::uninitialized_copy(ufirst, ulast, current_);
+    current_ += length;
+  }
+
   void push_back(const Type& value) {
     ensure_size_for_elements(1_UZ);
     raw_push_back(value);
@@ -262,11 +275,18 @@ class ArrayList : private Allocator {
     return current_ - data_;
   }
 
-  void set_capacity(const size_type new_capacity) {
+  void resize(const size_type new_capacity) {
+    if (capacity() < new_capacity) {
+      reserve(new_capacity);
+    }
+    current_ = data_ + new_capacity;
+  }
+
+  void reserve(const size_type new_capacity) {
     const auto cap = capacity();
     const auto len = size();
     const auto old_ptr = data_;
-    raw_set_capacity(new_capacity);
+    raw_reserve(new_capacity);
     if (old_ptr) {
       if (len > 0) {
         std::memcpy(data_, old_ptr, len * sizeof(Type));
@@ -346,7 +366,7 @@ class ArrayList : private Allocator {
   }
 
  private:
-  constexpr void raw_set_capacity(const size_type capacity) {
+  constexpr void raw_reserve(const size_type capacity) {
     const auto length = size();
     data_ = allocator_traits::allocate(get_allocator(), capacity);
     current_ = data_ + length;
@@ -361,7 +381,7 @@ class ArrayList : private Allocator {
 
   constexpr void copy_unsafe(const ArrayList& other) {
     const auto length = other.size();
-    set_capacity(length);
+    reserve(length);
     current_ = data_ + length;
     for (auto i = 0_UZ; i < length; ++i) {
       data_[i] = other.data_[i];
@@ -385,7 +405,7 @@ class ArrayList : private Allocator {
       grow_capacity();
     }
   }
-  void grow_capacity() { set_capacity((end_ - data_) * GrowthFactor); }
+  void grow_capacity() { reserve((end_ - data_) * GrowthFactor); }
 
   template <typename... Args>
   constexpr void raw_emplace_back(Args&&... args) {
