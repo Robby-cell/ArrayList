@@ -141,3 +141,32 @@ TEST_CASE("Non trivial types in iterator push_back") {
     REQUIRE(x == Capacity * 2);
   }
 }
+
+TEST_CASE("Resizing correctly destroys items") {
+  static int x = 0;
+  struct Foo {
+    ~Foo() { x++; }
+  };
+
+  constexpr size_t Capacity = 20U;
+  {
+    al::ArrayList<Foo> list(Capacity);
+
+    list.push_back(Foo{});
+    list.push_back(Foo{});
+    REQUIRE(x == 2);
+
+    constexpr size_t Size = 0U;
+    list.resize(Size);
+
+    REQUIRE(list.capacity() == Capacity);
+    REQUIRE(list.size() == Size);
+    REQUIRE(x == 2);
+
+    constexpr size_t NewSize = 10U;
+    list.reserve(NewSize);
+    REQUIRE(list.capacity() == NewSize);
+    REQUIRE(list.size() == Size);
+  }
+  REQUIRE(x == 2);
+}
