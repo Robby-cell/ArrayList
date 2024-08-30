@@ -251,7 +251,7 @@ class ArrayList : private Allocator {
   }
 
   AL_NODISCARD constexpr inline auto empty() const noexcept -> bool {
-    return size() == 0;
+    return data_ == current_;
   }
 
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
@@ -282,6 +282,8 @@ class ArrayList : private Allocator {
 
   constexpr void pop_back() {
     ensure_not_empty();
+    // destroy it!
+    current_->~value_type();
     --current_;
   }
 
@@ -289,11 +291,11 @@ class ArrayList : private Allocator {
     return current_ - data_;
   }
 
-  void resize(const size_type new_capacity) {
-    if (capacity() < new_capacity) {
-      reserve(new_capacity);
+  void resize(const size_type new_size) {
+    if (capacity() < new_size) {
+      reserve(new_size);
     }
-    current_ = data_ + new_capacity;
+    current_ = data_ + new_size;
   }
 
   void reserve(const size_type new_capacity) {
@@ -307,6 +309,11 @@ class ArrayList : private Allocator {
         // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
       }
       if (cap > 0) {
+        if (new_capacity < len) {
+          for (auto i = new_capacity; i < len; ++i) {
+            old_ptr[i].~value_type();
+          }
+        }
         allocator_traits::deallocate(get_allocator(), old_ptr, cap);
       }
     }
