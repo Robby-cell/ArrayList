@@ -1,6 +1,8 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "al/array_list.hpp"
 
@@ -172,4 +174,23 @@ TEST_CASE("Resizing correctly destroys items") {
     }
   }
   REQUIRE(x == 4);
+}
+
+TEST_CASE("Simple test vs std::vector") {
+  constexpr auto WhatToDo =
+      []<template <typename, typename> typename ContainerType>() {
+        ContainerType<int, std::allocator<int>> list;
+        list.reserve(10);
+        list.resize(20);
+
+        for (auto i = 0U; i < 20U; ++i) {
+          list.emplace_back();
+        }
+
+        REQUIRE(list.capacity() == 45);
+        REQUIRE(list.size() == 40);
+      };
+
+  SECTION("std::vector") { WhatToDo.template operator()<std::vector>(); }
+  SECTION("al::ArrayList") { WhatToDo.template operator()<al::ArrayList>(); }
 }
