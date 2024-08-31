@@ -72,8 +72,6 @@ constexpr auto get_unwrapped(Iter&& it) noexcept(
 template <typename Type, typename Allocator = std::allocator<Type>>
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
 class ArrayList : private Allocator {
-  static constexpr inline auto GrowthFactor = 2_UZ;
-
  public:
   // NOLINTBEGIN
   using allocator_type = Allocator;
@@ -88,6 +86,21 @@ class ArrayList : private Allocator {
   // NOLINTEND
 
  private:
+  constexpr auto calculate_growth(const size_type new_size) const noexcept
+      -> size_type {
+    const auto old_capacity = capacity();
+
+    // if (new_size > max_size() - old_capacity / 2) {
+    //   return max_size();
+    // }
+    const auto growth = old_capacity + old_capacity / 2;
+
+    if (growth < new_size) {
+      return new_size;
+    }
+    return growth;
+  }
+
   AL_NODISCARD constexpr inline auto get_allocator() noexcept
       -> allocator_type& {
     return static_cast<allocator_type&>(*this);
@@ -320,7 +333,7 @@ class ArrayList : private Allocator {
         // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
       }
       if (cap > 0) {
-        allocator_traits::deallocate(get_allocator(), old_ptr, cap);
+        deallocate_target_ptr(old_ptr, cap);
       }
     }
   }
@@ -433,7 +446,11 @@ class ArrayList : private Allocator {
       grow_capacity();
     }
   }
-  void grow_capacity() { reserve((end_ - data_) * GrowthFactor); }
+  void grow_capacity() {
+    const auto new_capacity = capacity() + 1;
+    const auto growth = calculate_growth(new_capacity);
+    reserve(growth);
+  }
 
   template <typename... Args>
   constexpr void raw_emplace_back(Args&&... args) {
@@ -468,11 +485,13 @@ class ArrayList : private Allocator {
       }
     }
   }
-  constexpr void deallocate_ptr() {
-    if (data_) {
-      allocator_traits::deallocate(get_allocator(), data_, end_ - data_);
+  constexpr void deallocate_target_ptr(value_type* const ptr,
+                                       const size_type length) {
+    if (ptr) {
+      allocator_traits::deallocate(get_allocator(), ptr, length);
     }
   }
+  constexpr void deallocate_ptr() { deallocate_target_ptr(data(), capacity()); }
 
   constexpr void swap_with_other(ArrayList& other) {
     std::swap(data_, other.data_);
