@@ -106,22 +106,20 @@ class ArrayList : private Allocator {
       -> allocator_type& {
     return static_cast<allocator_type&>(*this);
   }
-  struct Iterator {
+
+  struct ConstIterator {
    public:
     // NOLINTBEGIN
     using iterator_category = std::random_access_iterator_tag;
     using value_type = value_type;
     using difference_type = difference_type;
     using pointer = pointer;
+    using const_pointer = const_pointer;
     using reference = reference;
+    using const_reference = const_reference;
 
-    constexpr Iterator(pointer current) : current_(current) {}
-    constexpr Iterator(std::nullptr_t) : current_(nullptr) {}
-
-    AL_NODISCARD constexpr operator const_pointer() const noexcept {
-      return current_;
-    }
-    AL_NODISCARD constexpr operator pointer() noexcept { return current_; }
+    constexpr ConstIterator(pointer current) : current_(current) {}
+    constexpr ConstIterator(std::nullptr_t) : current_(nullptr) {}
     // NOLINTEND
 
     AL_NODISCARD constexpr auto operator*() noexcept -> reference {
@@ -131,57 +129,6 @@ class ArrayList : private Allocator {
       return *current_;
     }
     constexpr auto operator->() noexcept -> pointer { return current_; }
-    constexpr auto operator->() const noexcept -> const_pointer {
-      return current_;
-    }
-
-    constexpr auto operator++() noexcept -> Iterator& {
-      ++current_;
-      return *this;
-    }
-    constexpr auto operator++(int) noexcept -> Iterator {
-      auto tmp = *this;
-      ++current_;
-      return tmp;
-    }
-
-    AL_NODISCARD friend constexpr auto operator!=(
-        const Iterator& me, const Iterator& other) noexcept {
-      return me.current_ != other.current_;
-    }
-    AL_NODISCARD friend constexpr auto operator==(
-        const Iterator& me, const Iterator& other) noexcept {
-      return me.current_ == other.current_;
-    }
-
-   private:
-    pointer current_;
-  };
-  struct ConstIterator {
-   public:
-    // NOLINTBEGIN
-    using iterator_category = std::random_access_iterator_tag;
-    using value_type = value_type;
-    using difference_type = difference_type;
-    using pointer = const_pointer;
-    using reference = const_reference;
-
-    constexpr ConstIterator(pointer current) : current_(current) {}
-    constexpr ConstIterator(std::nullptr_t) : current_(nullptr) {}
-
-    AL_NODISCARD constexpr operator const_pointer() const noexcept {
-      return current_;
-    }
-    AL_NODISCARD constexpr operator pointer() noexcept { return current_; }
-    // NOLINTEND
-
-    AL_NODISCARD constexpr auto operator*() noexcept -> const_reference {
-      return *current_;
-    }
-    AL_NODISCARD constexpr auto operator*() const noexcept -> const_reference {
-      return *current_;
-    }
-    constexpr auto operator->() noexcept -> const_pointer { return current_; }
     constexpr auto operator->() const noexcept -> const_pointer {
       return current_;
     }
@@ -205,8 +152,78 @@ class ArrayList : private Allocator {
       return me.current_ == other.current_;
     }
 
+    AL_NODISCARD friend constexpr auto operator-(
+        const ConstIterator& me,
+        const ConstIterator& other) noexcept -> difference_type {
+      return static_cast<difference_type>(me.current_ - other.current_);
+    }
+
+    template <std::integral Integer>
+    friend constexpr auto operator+(const ConstIterator& me,
+                                    Integer n) noexcept -> ConstIterator {
+      return ConstIterator(me.current_ + n);
+    }
+
+   protected:
+    pointer current_;
+  };
+
+  struct Iterator : public ConstIterator {
+   public:
+    // NOLINTBEGIN
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type = value_type;
+    using difference_type = difference_type;
+    using pointer = pointer;
+    using reference = reference;
+
+    constexpr Iterator(pointer current) : ConstIterator(current) {}
+    constexpr Iterator(std::nullptr_t) : ConstIterator(nullptr) {}
+    // NOLINTEND
+
+    AL_NODISCARD constexpr auto operator*() noexcept -> reference {
+      return *this->current_;
+    }
+    AL_NODISCARD constexpr auto operator*() const noexcept -> const_reference {
+      return *this->current_;
+    }
+    constexpr auto operator->() noexcept -> pointer { return this->current_; }
+    constexpr auto operator->() const noexcept -> const_pointer {
+      return this->current_;
+    }
+
+    constexpr auto operator++() noexcept -> Iterator& {
+      ++this->current_;
+      return *this;
+    }
+    constexpr auto operator++(int) noexcept -> Iterator {
+      auto tmp = *this;
+      ++*this;
+      return tmp;
+    }
+
+    template <std::integral Integer>
+    friend constexpr auto operator+(const Iterator& me,
+                                    Integer n) noexcept -> Iterator {
+      return Iterator(me.current_ + n);
+    }
+
+    AL_NODISCARD friend constexpr auto operator!=(
+        const Iterator& me, const Iterator& other) noexcept {
+      return me.current_ != other.current_;
+    }
+    AL_NODISCARD friend constexpr auto operator==(
+        const Iterator& me, const Iterator& other) noexcept {
+      return me.current_ == other.current_;
+    }
+
    private:
-    const_pointer current_;
+    constexpr inline auto current() noexcept -> pointer {
+      return ConstIterator::current_;
+    }
+    constexpr inline auto current() const noexcept -> pointer {
+      return ConstIterator::current_;
+    }
   };
 
  public:
@@ -406,6 +423,24 @@ class ArrayList : private Allocator {
     current_ = data_;
   }
 
+  constexpr auto erase(const_iterator position) -> iterator {
+    const auto index = static_cast<size_type>(position - begin());
+    erase(index);
+    return begin() + index;
+  }
+
+  constexpr auto erase(const size_type index) -> iterator {
+    if (index >= size() or size() == 0) {
+      throw std::out_of_range("Index out of range");
+    }
+    const auto length = size();
+    for (auto i = index; i < length - 1; ++i) {
+      data_[i] = std::move(data_[i + 1]);
+    }
+    --current_;
+    return data_ + index;
+  }
+
  private:
   constexpr void raw_reserve(const size_type capacity) {
     const auto length = size();
@@ -520,5 +555,22 @@ class ArrayList : private Allocator {
 };
 
 }  // namespace al
+
+namespace std {
+template <typename Type, typename Ally>
+auto distance(typename al::ArrayList<Type, Ally>::iterator first,
+              typename al::ArrayList<Type, Ally>::iterator second)
+    -> al::ArrayList<Type, Ally>::size_type {
+  using MySizeType = al::ArrayList<Type, Ally>::size_type;
+  return static_cast<MySizeType>(second - first);
+}
+template <typename Type, typename Ally>
+auto distance(typename al::ArrayList<Type, Ally>::const_iterator first,
+              typename al::ArrayList<Type, Ally>::const_iterator second)
+    -> al::ArrayList<Type, Ally>::size_type {
+  using MySizeType = al::ArrayList<Type, Ally>::size_type;
+  return static_cast<MySizeType>(second - first);
+}
+}  // namespace std
 
 #endif  // ARRAY_LIST_HPP
