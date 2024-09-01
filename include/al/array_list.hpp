@@ -23,13 +23,14 @@ consteval inline auto operator""_UZ(const unsigned long long value) -> size_t {
 namespace detail {
 
 template <class Iter>
-using IterCatType = typename std::iterator_traits<Iter>::iterator_category;
+using IterConcatenateType =
+    typename std::iterator_traits<Iter>::iterator_category;
 
 template <class Type, class = void>
 constexpr bool IsIterator = false;
 
 template <class Type>
-constexpr bool IsIterator<Type, std::void_t<IterCatType<Type>>> = true;
+constexpr bool IsIterator<Type, std::void_t<IterConcatenateType<Type>>> = true;
 
 template <class Iter, class = void>
 constexpr bool AllowInheritingUnwrap = true;
@@ -268,7 +269,7 @@ class ArrayList : private Allocator {
   }
 
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  constexpr void push_back(Iter first, Iter last) {
+  constexpr auto push_back(Iter first, Iter last) -> void {
     auto ufirst = detail::get_unwrapped(first);
     auto ulast = detail::get_unwrapped(last);
 
@@ -279,18 +280,18 @@ class ArrayList : private Allocator {
     current_ += length;
   }
 
-  void push_back(const Type& value) {
+  auto push_back(const Type& value) -> void {
     ensure_size_for_elements(1_UZ);
     raw_push_back(value);
   }
-  void push_back(Type&& value) {
+  auto push_back(Type&& value) -> void {
     ensure_size_for_elements(1_UZ);
     raw_push_back(std::move(value));
   }
   template <typename... Args>
-  void emplace_back(Args&&... args) {
+  auto emplace_back(Args&&... args) -> value_type& {
     ensure_size_for_elements(1_UZ);
-    raw_emplace_back(std::forward<Args>(args)...);
+    return raw_emplace_back(std::forward<Args>(args)...);
   }
 
   constexpr void pop_back() {
@@ -453,47 +454,61 @@ class ArrayList : private Allocator {
   }
 
   template <typename... Args>
-  constexpr void raw_emplace_back(Args&&... args) {
-    raw_emplace_into(current_++, std::forward<Args>(args)...);
+  constexpr auto raw_emplace_back(Args&&... args) -> value_type& {
+    return emplace_at_back(std::forward<Args>(args)...);
   }
-  constexpr void raw_push_back(const Type& value) {
-    raw_push_into(current_++, value);
+  constexpr auto raw_push_back(const Type& value) -> void {
+    push_at_back(value);
   }
-  constexpr void raw_push_back(Type&& value) {
-    raw_push_into(current_++, std::move(value));
+  constexpr auto raw_push_back(Type&& value) -> void {
+    push_at_back(std::move(value));
   }
 
   template <typename... Args>
-  constexpr void raw_emplace_into(value_type* const my_ptr, Args&&... args) {
-    // *my_ptr = Type(std::forward<Args>(args)...);
+  constexpr auto raw_emplace_into(value_type* const my_ptr,
+                                  Args&&... args) -> value_type& {
     new (my_ptr) value_type(std::forward<Args>(args)...);
+    return *my_ptr;
   }
-  constexpr void raw_push_into(value_type* const my_ptr, const Type& value) {
+  constexpr auto raw_push_into(value_type* const my_ptr,
+                               const Type& value) -> void {
     new (my_ptr) value_type(value);
   }
-  constexpr void raw_push_into(value_type* const my_ptr, Type&& value) {
-    // *my_ptr = std::move(value);
+  constexpr auto raw_push_into(value_type* const my_ptr, Type&& value) -> void {
     new (my_ptr) value_type(std::move(value));
   }
 
-  constexpr void destruct_all_elements() {
+  template <typename... Args>
+  constexpr auto emplace_at_back(Args&&... args) -> value_type& {
+    return raw_emplace_into(current_++, std::forward<Args>(args)...);
+  }
+  constexpr auto push_at_back(const Type& value) -> void {
+    raw_push_into(current_++, value);
+  }
+  constexpr auto push_at_back(Type&& value) -> void {
+    raw_push_into(current_++, std::move(value));
+  }
+
+  constexpr inline auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
       if (data_) {
         for (auto& item : *this) {
-          item.~Type();
+          item.~value_type();
         }
       }
     }
   }
-  constexpr void deallocate_target_ptr(value_type* const ptr,
-                                       const size_type length) {
+  constexpr auto deallocate_target_ptr(value_type* const ptr,
+                                       const size_type length) -> void {
     if (ptr) {
       allocator_traits::deallocate(get_allocator(), ptr, length);
     }
   }
-  constexpr void deallocate_ptr() { deallocate_target_ptr(data(), capacity()); }
+  constexpr auto deallocate_ptr() -> void {
+    deallocate_target_ptr(data(), capacity());
+  }
 
-  constexpr void swap_with_other(ArrayList& other) {
+  constexpr auto swap_with_other(ArrayList& other) -> void {
     std::swap(data_, other.data_);
     std::swap(end_, other.end_);
     std::swap(current_, other.current_);
