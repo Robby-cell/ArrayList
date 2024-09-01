@@ -178,8 +178,9 @@ TEST_CASE("Resizing correctly destroys items") {
 
 TEST_CASE("Simple test vs std::vector") {
   constexpr auto WhatToDo =
-      []<template <typename, typename> typename ContainerType>() {
-        ContainerType<int, std::allocator<int>> list;
+      []<template <typename Type, typename = std::allocator<Type>>
+         typename ContainerType>() {
+        ContainerType<int> list;
         list.reserve(10);
         list.resize(20);
 
