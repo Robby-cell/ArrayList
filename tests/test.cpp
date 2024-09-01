@@ -195,3 +195,27 @@ TEST_CASE("Simple test vs std::vector") {
   SECTION("std::vector") { WhatToDo.template operator()<std::vector>(); }
   SECTION("al::ArrayList") { WhatToDo.template operator()<al::ArrayList>(); }
 }
+
+TEST_CASE("Erase") {
+  al::ArrayList<int> list;
+  list.push_back(1);
+  list.push_back(2);
+  list.push_back(3);
+  list.push_back(4);
+  list.push_back(5);
+
+  REQUIRE(list.size() == 5);
+  REQUIRE(list[0] == 1);
+  REQUIRE(list[1] == 2);
+  REQUIRE(list[2] == 3);
+  REQUIRE(list[3] == 4);
+  REQUIRE(list[4] == 5);
+
+  auto it = list.erase(const_cast<const al::ArrayList<int>&>(list).begin() + 2);
+
+  REQUIRE(list.size() == 4);
+  REQUIRE(list[0] == 1);
+  REQUIRE(list[1] == 2);
+  REQUIRE(list[2] == 4);
+  REQUIRE(list[3] == 5);
+}
