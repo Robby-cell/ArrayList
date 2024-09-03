@@ -227,14 +227,16 @@ TEST_CASE("Constant values") {
     return _List.MEMBER(CALL_ARGS);                \
   }()
 #define ARGS(MY_ARGS...) MY_ARGS
-#define ASSERT_SAME(TYPE1, TYPE2, CTR_ARGS, MEMBER, CALL_ARGS...) \
-  REQUIRE(CALL(TYPE1, ARGS(CTR_ARGS), MEMBER, CALL_ARGS) ==       \
+#define ASSERT_SAME(TYPE1, TYPE2, CTR_ARGS, MEMBER, CALL_ARGS) \
+  REQUIRE(CALL(TYPE1, ARGS(CTR_ARGS), MEMBER, CALL_ARGS) ==    \
           CALL(TYPE2, ARGS(CTR_ARGS), MEMBER, CALL_ARGS))
 
-  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(), max_size);
-  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(10), max_size);
-  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(100), max_size);
-  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(1000), capacity);
+  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(), max_size, ARGS());
+  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(10), max_size, ARGS());
+  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(100), max_size,
+              ARGS());
+  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(1000), capacity,
+              ARGS());
 
 #undef ASSERT_SAME
 #undef ARGS
