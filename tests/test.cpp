@@ -219,3 +219,24 @@ TEST_CASE("Erase") {
   REQUIRE(list[2] == 4);
   REQUIRE(list[3] == 5);
 }
+
+TEST_CASE("Constant values") {
+#define CALL(TYPE, CTR_ARGS, MEMBER, CALL_ARGS...) \
+  []() {                                           \
+    TYPE _List = TYPE(CTR_ARGS);                   \
+    return _List.MEMBER(CALL_ARGS);                \
+  }()
+#define ARGS(MY_ARGS...) MY_ARGS
+#define ASSERT_SAME(TYPE1, TYPE2, CTR_ARGS, MEMBER, CALL_ARGS...) \
+  REQUIRE(CALL(TYPE1, ARGS(CTR_ARGS), MEMBER, CALL_ARGS) ==       \
+          CALL(TYPE2, ARGS(CTR_ARGS), MEMBER, CALL_ARGS))
+
+  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(), max_size);
+  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(10), max_size);
+  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(100), max_size);
+  ASSERT_SAME(al::ArrayList<int>, al::ArrayList<int>, ARGS(1000), capacity);
+
+#undef ASSERT_SAME
+#undef ARGS
+#undef CALL
+}
