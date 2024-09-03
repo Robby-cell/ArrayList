@@ -86,14 +86,18 @@ class ArrayList : private Allocator {
   using difference_type = std::ptrdiff_t;
   // NOLINTEND
 
+  constexpr auto max_size() const noexcept -> size_type {
+    return static_cast<size_type>(-1) / sizeof(value_type);
+  }
+
  private:
   constexpr auto calculate_growth(const size_type new_size) const noexcept
       -> size_type {
     const auto old_capacity = capacity();
 
-    // if (new_size > max_size() - old_capacity / 2) {
-    //   return max_size();
-    // }
+    if (new_size > max_size() - old_capacity / 2) {
+      return max_size();
+    }
     const auto growth = old_capacity + old_capacity / 2;
 
     if (growth < new_size) {
