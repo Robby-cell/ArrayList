@@ -221,10 +221,10 @@ TEST_CASE("Erase") {
 }
 
 TEST_CASE("Constant values") {
-#define CALL(TYPE, CTR_ARGS, MEMBER, CALL_ARGS...) \
-  []() {                                           \
-    TYPE _List = TYPE(CTR_ARGS);                   \
-    return _List.MEMBER(CALL_ARGS);                \
+#define CALL(TYPE, CTR_ARGS, MEMBER, CALL_ARGS) \
+  []() {                                        \
+    TYPE _List{CTR_ARGS};                       \
+    return _List.MEMBER(CALL_ARGS);             \
   }()
 #define ARGS(MY_ARGS...) MY_ARGS
 #define ASSERT_SAME(TYPE1, TYPE2, CTR_ARGS, MEMBER, CALL_ARGS) \

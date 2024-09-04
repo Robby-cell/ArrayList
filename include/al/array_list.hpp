@@ -326,7 +326,9 @@ class ArrayList : private Allocator {
     return current_ - data_;
   }
 
-  void resize(const size_type new_size) {
+  void resize(const size_type new_size)
+    requires(std::is_constructible_v<value_type>)
+  {
     const auto len = size();
     if (new_size < len) {
       for (auto i = new_size; i < len; ++i) {
@@ -337,7 +339,12 @@ class ArrayList : private Allocator {
     if (capacity() < new_size) {
       reserve(new_size);
     }
+    auto* tmp = current_;
     current_ = data_ + new_size;
+
+    for (; tmp < current_; ++tmp) {
+      new (tmp) value_type();
+    }
   }
 
   void reserve(const size_type new_capacity) {

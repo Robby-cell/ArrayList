@@ -135,6 +135,7 @@ class LinkedList {
 };
 
 struct Foo {
+  Foo() { std::cerr << "Creating Foo\n"; }
   ~Foo() { std::cerr << "Deleting Foo\n"; }
 };
 auto operator<<(std::ostream& os,
@@ -153,6 +154,10 @@ auto main() -> int {
   for (const auto& num : n) {
     std::cerr << num << '\n';
   }
+
+  al::ArrayList<Foo> l;
+  std::cerr << "Resizing\n";
+  l.resize(10);
 
   LinkedList<Foo> list{};
   list.push_back();
