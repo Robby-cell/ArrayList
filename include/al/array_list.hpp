@@ -1,7 +1,6 @@
 #ifndef ARRAY_LIST_HPP
 #define ARRAY_LIST_HPP
 
-#include <cstring>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
