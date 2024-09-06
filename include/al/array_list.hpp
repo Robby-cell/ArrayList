@@ -16,6 +16,12 @@ namespace al {
 #endif
 #define AL_NODISCARD [[nodiscard]]
 
+template <typename Container>
+concept ContainerLike = requires(Container c) {
+  c.begin();
+  c.end();
+};
+
 consteval inline auto operator""_UZ(const unsigned long long value) -> size_t {
   return static_cast<size_t>(value);
 }
@@ -59,7 +65,7 @@ constexpr bool HasNothrowUnwrapped<
 
 template <class Iter>
 constexpr auto get_unwrapped(Iter&& it) noexcept(
-    !IsUnwrappable<Iter> || HasNothrowUnwrapped<Iter>) -> decltype(auto) {
+    not IsUnwrappable<Iter> or HasNothrowUnwrapped<Iter>) -> decltype(auto) {
   if constexpr (std::is_pointer_v<std::decay_t<Iter>>) {
     return it + 0;
   } else if constexpr (IsUnwrappable<Iter>) {
@@ -147,9 +153,9 @@ class ArrayList : private Allocator {
       return tmp;
     }
 
-    AL_NODISCARD friend constexpr auto operator!=(
+    AL_NODISCARD friend constexpr auto operator not_eq(
         const ConstIterator& me, const ConstIterator& other) noexcept {
-      return me.current_ != other.current_;
+      return me.current_ not_eq other.current_;
     }
     AL_NODISCARD friend constexpr auto operator==(
         const ConstIterator& me, const ConstIterator& other) noexcept {
@@ -212,9 +218,9 @@ class ArrayList : private Allocator {
       return Iterator(me.current_ + n);
     }
 
-    AL_NODISCARD friend constexpr auto operator!=(
+    AL_NODISCARD friend constexpr auto operator not_eq(
         const Iterator& me, const Iterator& other) noexcept {
-      return me.current_ != other.current_;
+      return me.current_ not_eq other.current_;
     }
     AL_NODISCARD friend constexpr auto operator==(
         const Iterator& me, const Iterator& other) noexcept {
@@ -245,8 +251,8 @@ class ArrayList : private Allocator {
   constexpr ArrayList(
       Iter first, Iter last,
       [[maybe_unused]] const allocator_type& alloc = allocator_type()) {
-    auto ufirst = detail::get_unwrapped(first);
-    auto ulast = detail::get_unwrapped(last);
+    const auto ufirst = detail::get_unwrapped(first);
+    const auto ulast = detail::get_unwrapped(last);
 
     const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
 
@@ -262,6 +268,15 @@ class ArrayList : private Allocator {
       [[maybe_unused]] const allocator_type& alloc = allocator_type())
       : ArrayList(list.begin(), list.end()) {}
 
+  template <ContainerLike Container>
+  constexpr explicit ArrayList(const Container& container,
+                               const allocator_type& alloc = {})
+      : ArrayList(container.begin(), container.end(), alloc) {}
+  template <ContainerLike Container>
+  constexpr explicit ArrayList(Container&& container,
+                               const allocator_type& alloc = {})
+      : ArrayList(container.begin(), container.end(), alloc) {}
+
   constexpr ArrayList(const ArrayList& other)
       : ArrayList(other.begin(), other.end()) {}
   constexpr ArrayList(ArrayList&& other) noexcept : ArrayList(0) {
@@ -269,7 +284,7 @@ class ArrayList : private Allocator {
   }
 
   constexpr auto operator=(const ArrayList& other) -> ArrayList& {
-    if (this != &other) {
+    if (this not_eq &other) {
       copy_safe(other);
     }
     return *this;
@@ -291,8 +306,8 @@ class ArrayList : private Allocator {
 
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
   constexpr auto push_back(Iter first, Iter last) -> void {
-    auto ufirst = detail::get_unwrapped(first);
-    auto ulast = detail::get_unwrapped(last);
+    const auto ufirst = detail::get_unwrapped(first);
+    const auto ulast = detail::get_unwrapped(last);
 
     const auto length = std::distance(ufirst, ulast);
     ensure_size_for_elements(length);
@@ -569,15 +584,17 @@ class ArrayList : private Allocator {
 
 namespace std {
 template <typename Type, typename Ally>
-auto distance(typename al::ArrayList<Type, Ally>::iterator first,
-              typename al::ArrayList<Type, Ally>::iterator second)
+constexpr auto distance(
+    const typename al::ArrayList<Type, Ally>::iterator first,
+    const typename al::ArrayList<Type, Ally>::iterator second)
     -> al::ArrayList<Type, Ally>::size_type {
   using MySizeType = al::ArrayList<Type, Ally>::size_type;
   return static_cast<MySizeType>(second - first);
 }
 template <typename Type, typename Ally>
-auto distance(typename al::ArrayList<Type, Ally>::const_iterator first,
-              typename al::ArrayList<Type, Ally>::const_iterator second)
+constexpr auto distance(
+    const typename al::ArrayList<Type, Ally>::const_iterator first,
+    const typename al::ArrayList<Type, Ally>::const_iterator second)
     -> al::ArrayList<Type, Ally>::size_type {
   using MySizeType = al::ArrayList<Type, Ally>::size_type;
   return static_cast<MySizeType>(second - first);
