@@ -1,4 +1,5 @@
 #include <array>
+#include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <memory>
 #include <string>
@@ -241,4 +242,43 @@ TEST_CASE("Constant values") {
 #undef ASSERT_SAME
 #undef ARGS
 #undef CALL
+}
+
+TEST_CASE("Container-like constructors") {
+  std::array<int, 10> values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  al::ArrayList<int> list{values};
+
+  REQUIRE(list.size() == 10);
+  REQUIRE(list.front() == values.front());
+  REQUIRE(list.back() == values.back());
+}
+
+TEST_CASE("Construction from std::vector") {
+  std::vector<int> values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  al::ArrayList<int> list(values);
+
+  for (auto index = 0; index < list.size(); ++index) {
+    REQUIRE(list[index] == values[index]);
+  }
+}
+
+TEST_CASE("Benchmark simple behavior") {
+  constexpr auto WhatToDo =
+      []<template <typename Type, typename = std::allocator<Type>>
+         typename ContainerType>() {
+        ContainerType<int> list;
+        list.reserve(10);
+        list.resize(20);
+
+        for (auto i = 0U; i < 20U; ++i) {
+          list.emplace_back();
+        }
+      };
+
+  BENCHMARK("std::vector") {
+    return WhatToDo.template operator()<std::vector>();
+  };
+  BENCHMARK("al::ArrayList") {
+    return WhatToDo.template operator()<al::ArrayList>();
+  };
 }
