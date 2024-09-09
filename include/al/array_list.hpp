@@ -1,6 +1,8 @@
 #ifndef ARRAY_LIST_HPP
 #define ARRAY_LIST_HPP
 
+#include <vcruntime_typeinfo.h>
+
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -16,12 +18,12 @@ namespace al {
 #define AL_NODISCARD [[nodiscard]]
 
 template <typename Container>
-concept ContainerLike = requires(Container c) {
+concept IterableContainer = requires(Container c) {
   c.begin();
   c.end();
 };
 
-consteval inline auto operator""_UZ(const unsigned long long value) -> size_t {
+consteval auto operator""_UZ(const unsigned long long value) -> size_t {
   return static_cast<size_t>(value);
 }
 
@@ -73,22 +75,72 @@ constexpr auto get_unwrapped(Iter&& it) noexcept(
     return static_cast<Iter&&>(it);
   }
 }
+
+template <typename Iter>
+struct IterType {
+  using typename Iter::value_type;
+};
+template <typename Iter>
+struct IterType<Iter*> {
+  using value_type = Iter;  // NOLINT
+};
+template <typename Iter>
+struct IterType<Iter const*> {
+  using value_type = Iter;  // NOLINT
+};
+template <typename Iter>
+struct IterType<Iter[]> {
+  using value_type = Iter;  // NOLINT
+};
+
+template <typename Iter, typename Sentinel>
+constexpr auto destroy_range(Iter first, Sentinel last) noexcept;
+
+template <typename Type>
+constexpr auto destroy_in_place(Type& value) noexcept {
+  if constexpr (std::is_array_v<Type>) {
+    destroy_range(value, value + std::extent_v<Type>);
+  } else {
+    value.~Type();
+  }
+}
+
+template <typename Iter, typename Sentinel>
+constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
+  if constexpr (not std::is_trivially_destructible_v<
+                    typename IterType<Iter>::value_type>) {
+    for (; first != last; ++first) {
+      destroy_in_place(*first);
+    }
+  }
+}
+
 }  // namespace detail
 
 template <typename Type, typename Allocator = std::allocator<Type>>
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
-class ArrayList : private Allocator {
- public:
+class ArrayList
+    : private std::allocator_traits<Allocator>::template rebind_alloc<Type> {
+  static_assert(
+      std::is_same_v<Type, typename Allocator::value_type>,
+      "Requires allocator's type to match the type held by the ArrayList");
+  static_assert(std::is_object_v<Type>,
+                "Requires type held by the ArrayList to be an object");
+
   // NOLINTBEGIN
+  using Alty =
+      typename std::allocator_traits<Allocator>::template rebind_alloc<Type>;
+  using allocator_traits = std::allocator_traits<Alty>;
+
+ public:
+  using value_type = Type;
   using allocator_type = Allocator;
-  using allocator_traits = std::allocator_traits<allocator_type>;
-  using value_type = std::remove_const_t<Type>;
-  using pointer = value_type*;
-  using const_pointer = const value_type*;
-  using reference = value_type&;
-  using const_reference = const value_type&;
-  using size_type = std::size_t;
-  using difference_type = std::ptrdiff_t;
+  using pointer = typename allocator_traits::pointer;
+  using const_pointer = typename allocator_traits::const_pointer;
+  using reference = Type&;
+  using const_reference = const Type&;
+  using size_type = typename allocator_traits::size_type;
+  using difference_type = typename allocator_traits::difference_type;
   // NOLINTEND
 
   constexpr auto max_size() const noexcept -> size_type {
@@ -241,15 +293,17 @@ class ArrayList : private Allocator {
   using const_iterator = ConstIterator;
   // NOLINTEND
 
-  constexpr explicit ArrayList(const size_type capacity = 8_UZ)
-      : data_(allocator_traits::allocate(get_allocator(), capacity)) {
+  constexpr explicit ArrayList(const size_type capacity = 8_UZ,
+                               const allocator_type& alloc = allocator_type())
+      : allocator_type(alloc),
+        data_(allocator_traits::allocate(get_allocator(), capacity)) {
     end_ = data_ + capacity;
     current_ = data_;
   }
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  constexpr ArrayList(
-      Iter first, Iter last,
-      [[maybe_unused]] const allocator_type& alloc = allocator_type()) {
+  constexpr ArrayList(Iter first, Iter last,
+                      const allocator_type& alloc = allocator_type())
+      : allocator_type(alloc) {
     const auto ufirst = detail::get_unwrapped(first);
     const auto ulast = detail::get_unwrapped(last);
 
@@ -262,22 +316,22 @@ class ArrayList : private Allocator {
     std::uninitialized_copy(ufirst, ulast, data_);
   }
 
-  constexpr ArrayList(
-      std::initializer_list<Type> list,
-      [[maybe_unused]] const allocator_type& alloc = allocator_type())
-      : ArrayList(list.begin(), list.end()) {}
+  constexpr ArrayList(std::initializer_list<Type> list,
+                      const allocator_type& alloc = allocator_type())
+      : ArrayList(list.begin(), list.end(), alloc) {}
 
-  template <ContainerLike Container>
+  template <IterableContainer Container>
   constexpr explicit ArrayList(const Container& container,
-                               const allocator_type& alloc = {})
+                               const allocator_type& alloc = allocator_type())
       : ArrayList(container.begin(), container.end(), alloc) {}
-  template <ContainerLike Container>
+  template <IterableContainer Container>
   constexpr explicit ArrayList(Container&& container,
-                               const allocator_type& alloc = {})
+                               const allocator_type& alloc = allocator_type())
       : ArrayList(container.begin(), container.end(), alloc) {}
 
-  constexpr ArrayList(const ArrayList& other)
-      : ArrayList(other.begin(), other.end()) {}
+  constexpr ArrayList(const ArrayList& other,
+                      const allocator_type& alloc = allocator_type())
+      : ArrayList(other.begin(), other.end(), alloc) {}
   constexpr ArrayList(ArrayList&& other) noexcept : ArrayList(0) {
     swap_with_other(other);
   }
@@ -551,11 +605,7 @@ class ArrayList : private Allocator {
 
   constexpr inline auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
-      if (data_) {
-        for (auto& item : *this) {
-          item.~value_type();
-        }
-      }
+      detail::destroy_range(data_, current_);
     }
   }
   constexpr auto deallocate_target_ptr(value_type* const ptr,
