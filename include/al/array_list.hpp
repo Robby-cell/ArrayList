@@ -337,7 +337,7 @@ class ArrayList
   }
 
   constexpr auto operator=(const ArrayList& other) -> ArrayList& {
-    if (this not_eq &other) {
+    if (this not_eq std::addressof(other)) {
       copy_safe(other);
     }
     return *this;
