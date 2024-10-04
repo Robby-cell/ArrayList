@@ -11,14 +11,9 @@
 #define HAS_CXX20 (__cplusplus >= 202002UL)
 #define HAS_CONCEPTS (HAS_CXX20)
 
-#if HAS_CXX20
+#if HAS_CONCEPTS
 #include <concepts>
-#else   // ^^^ HAS_CXX20
-namespace std {
-template <typename Type>
-using remove_cvref_t = std::_Remove_cvref_t<Type>;  // NOLINT
-}
-#endif  // ^^^ !HAS_CXX20
+#endif
 
 #if HAS_CONCEPTS
 #define CONSTRAINT(CONSTRAINT_NAME) CONSTRAINT_NAME
@@ -27,6 +22,16 @@ using remove_cvref_t = std::_Remove_cvref_t<Type>;  // NOLINT
 #endif
 
 namespace al {
+
+#if HAS_CXX20
+using std::remove_cvref_t;
+#else   // ^^^ HAS_CXX20
+// NOLINTBEGIN
+template <typename Type>
+using remove_cvref_t =
+    typename std::remove_cv<typename std::remove_reference<Type>::type>::type;
+// NOLINTEND
+#endif  // ^^^ !HAS_CXX20
 
 #ifdef AL_NODISCARD
 #undef AL_NODISCARD
@@ -71,9 +76,9 @@ constexpr bool IsUnwrappable = false;
 template <class Iter>
 constexpr bool IsUnwrappable<
     Iter,
-    std::void_t<decltype(std::declval<std::remove_cvref_t<Iter>&>()._Seek_to(
+    std::void_t<decltype(std::declval<al::remove_cvref_t<Iter>&>()._Seek_to(
         std::declval<Iter>()._Unwrapped()))>> =
-    AllowInheritingUnwrap<std::remove_cvref_t<Iter>>;
+    AllowInheritingUnwrap<al::remove_cvref_t<Iter>>;
 
 template <class Iter, class = void>
 constexpr bool HasNothrowUnwrapped = false;
