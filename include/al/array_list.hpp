@@ -257,6 +257,10 @@ class ArrayList
   using const_reference = const Type&;
   using size_type = typename allocator_traits::size_type;
   using difference_type = typename allocator_traits::difference_type;
+  using iterator = ArrayListIterator<ArrayList>;
+  using const_iterator = ArrayListConstIterator<ArrayList>;
+  using reverse_iterator = std::reverse_iterator<iterator>;
+  using const_reverse_iterator = std::reverse_iterator<const_iterator>;
   // NOLINTEND
 
   constexpr auto max_size() const noexcept -> size_type {
@@ -285,11 +289,6 @@ class ArrayList
   }
 
  public:
-  // NOLINTBEGIN
-  using iterator = ArrayListIterator<ArrayList>;
-  using const_iterator = ArrayListConstIterator<ArrayList>;
-  // NOLINTEND
-
   constexpr explicit ArrayList(const size_type capacity = 8_UZ,
                                const allocator_type& alloc = allocator_type())
       : allocator_type(alloc),
@@ -492,6 +491,19 @@ class ArrayList
   }
   AL_NODISCARD constexpr auto cend() const noexcept -> const_iterator {
     return current_;
+  }
+  AL_NODISCARD constexpr auto rbegin() noexcept -> reverse_iterator {
+    return reverse_iterator(end());
+  }
+  AL_NODISCARD constexpr auto rend() noexcept -> reverse_iterator {
+    return reverse_iterator(begin());
+  }
+  AL_NODISCARD constexpr auto rbegin() const noexcept
+      -> const_reverse_iterator {
+    return const_reverse_iterator(end());
+  }
+  AL_NODISCARD constexpr auto rend() const noexcept -> const_reverse_iterator {
+    return const_reverse_iterator(begin());
   }
 
   constexpr auto clear() noexcept -> void {
