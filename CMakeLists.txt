@@ -8,7 +8,4 @@ set(CMAKE_CXX_STANDARD 20)
 add_library(array_list_impl INTERFACE)
 include_directories(array_list_impl INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-add_executable(array_list
-  main.cpp)
-
 add_subdirectory(tests)
