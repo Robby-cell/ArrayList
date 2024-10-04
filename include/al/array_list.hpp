@@ -395,9 +395,10 @@ class ArrayList
   {
     const auto len = size();
     if (new_size < len) {
-      for (auto i = new_size; i < len; ++i) {
-        data_[i].~value_type();
-      }
+      // for (auto i = new_size; i < len; ++i) {
+      //   data_[i].~value_type();
+      // }
+      std::destroy_n(data_ + new_size, len - new_size);
     }
 
     if (capacity() < new_size) {
@@ -406,9 +407,10 @@ class ArrayList
     auto* tmp = current_;
     current_ = data_ + new_size;
 
-    for (; tmp < current_; ++tmp) {
-      new (tmp) value_type();
-    }
+    // for (; tmp < current_; ++tmp) {
+    //   new (tmp) value_type();
+    // }
+    std::uninitialized_value_construct_n(tmp, new_size);
   }
 
   void reserve(const size_type new_capacity) {
