@@ -1,15 +1,21 @@
 #ifndef ARRAY_LIST_HPP
 #define ARRAY_LIST_HPP
 
+#define HAS_CXX20 (__cplusplus >= 202002UL)
+#define HAS_CXX17 (__cplusplus >= 201703UL)
+
+#if !HAS_CXX17
+#error "This library requires C++17 or higher"
+#endif
+
+#define HAS_CONCEPTS (HAS_CXX20)
+
 #include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-
-#define HAS_CXX20 (__cplusplus >= 202002UL)
-#define HAS_CONCEPTS (HAS_CXX20)
 
 #if HAS_CONCEPTS
 #include <concepts>
