@@ -8,6 +8,24 @@
 #include <type_traits>
 #include <utility>
 
+#define HAS_CXX20 (__cplusplus >= 202002UL)
+#define HAS_CONCEPTS (HAS_CXX20)
+
+#if HAS_CXX20
+#include <concepts>
+#else   // ^^^ HAS_CXX20
+namespace std {
+template <typename Type>
+using remove_cvref_t = std::_Remove_cvref_t<Type>;  // NOLINT
+}
+#endif  // ^^^ !HAS_CXX20
+
+#if HAS_CONCEPTS
+#define CONSTRAINT(CONSTRAINT_NAME) CONSTRAINT_NAME
+#else
+#define CONSTRAINT(X) typename
+#endif
+
 namespace al {
 
 #ifdef AL_NODISCARD
@@ -15,13 +33,15 @@ namespace al {
 #endif
 #define AL_NODISCARD [[nodiscard]]
 
+#if HAS_CONCEPTS
 template <typename Container>
 concept IterableContainer = requires(Container c) {
   std::begin(c);
   std::end(c);
 };
+#endif  // ^^^ HAS_CONCEPTS
 
-consteval auto operator""_UZ(const unsigned long long value) -> size_t {
+constexpr auto operator""_UZ(const unsigned long long value) -> size_t {
   return static_cast<size_t>(value);
 }
 
@@ -167,7 +187,7 @@ struct ArrayListConstIterator {
     return static_cast<difference_type>(ptr_ - other.ptr_);
   }
 
-  template <std::integral Integer>
+  template <CONSTRAINT(std::integral) Integer>
   constexpr auto operator+(Integer n) const& noexcept
       -> ArrayListConstIterator {
     return ArrayListConstIterator(ptr_ + n);
@@ -190,8 +210,10 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
   using pointer = value_type*;
   using reference = value_type&;
 
-  constexpr ArrayListIterator(pointer current) : Base(current) {}
-  constexpr ArrayListIterator(std::nullptr_t) : Base(nullptr) {}
+  constexpr ArrayListIterator(pointer current)
+      : ArrayListConstIterator<ArrayList>(current) {}
+  constexpr ArrayListIterator(std::nullptr_t)
+      : ArrayListConstIterator<ArrayList>(nullptr) {}
   // NOLINTEND
 
   AL_NODISCARD constexpr auto operator*() const noexcept -> reference {
@@ -218,7 +240,7 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
     return *this;
   }
 
-  template <std::integral Integer>
+  template <CONSTRAINT(std::integral) Integer>
   constexpr auto operator+(Integer n) noexcept -> ArrayListIterator {
     return ArrayListIterator(Base::ptr_ + n);
   }
@@ -234,7 +256,9 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
 };
 
 template <typename Type, typename Allocator = std::allocator<Type>>
+#if HAS_CONCEPTS
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
+#endif
 class ArrayList
     : private std::allocator_traits<Allocator>::template rebind_alloc<Type> {
   static_assert(
@@ -316,11 +340,12 @@ class ArrayList
                       const allocator_type& alloc = allocator_type())
       : ArrayList(list.begin(), list.end(), alloc) {}
 
-  template <IterableContainer Container>
+  template <CONSTRAINT(IterableContainer) Container>
   constexpr explicit ArrayList(const Container& container,
                                const allocator_type& alloc = allocator_type())
       : ArrayList(container.begin(), container.end(), alloc) {}
-  template <IterableContainer Container>
+  template <CONSTRAINT(IterableContainer) Container,
+            std::enable_if_t<true, int> = 0>
   constexpr explicit ArrayList(Container&& container,
                                const allocator_type& alloc = allocator_type())
       : ArrayList(container.begin(), container.end(), alloc) {}
@@ -391,7 +416,9 @@ class ArrayList
   }
 
   void resize(const size_type new_size)
+#if HAS_CONCEPTS
     requires(std::is_constructible_v<value_type>)
+#endif
   {
     const auto len = size();
     if (new_size < len) {
@@ -478,21 +505,29 @@ class ArrayList
     return *(current_ - 1);
   }
 
-  AL_NODISCARD constexpr auto begin() noexcept -> iterator { return data_; }
-  AL_NODISCARD constexpr auto end() noexcept -> iterator { return current_; }
-  AL_NODISCARD constexpr auto cbegin() noexcept -> iterator { return data_; }
-  AL_NODISCARD constexpr auto cend() noexcept -> iterator { return current_; }
+  AL_NODISCARD constexpr auto begin() noexcept -> iterator {
+    return iterator(data_);
+  }
+  AL_NODISCARD constexpr auto end() noexcept -> iterator {
+    return iterator(current_);
+  }
+  AL_NODISCARD constexpr auto cbegin() noexcept -> iterator {
+    return iterator(data_);
+  }
+  AL_NODISCARD constexpr auto cend() noexcept -> iterator {
+    return iterator(current_);
+  }
   AL_NODISCARD constexpr auto begin() const noexcept -> const_iterator {
-    return data_;
+    return const_iterator(data_);
   }
   AL_NODISCARD constexpr auto end() const noexcept -> const_iterator {
-    return current_;
+    return const_iterator(current_);
   }
   AL_NODISCARD constexpr auto cbegin() const noexcept -> const_iterator {
-    return data_;
+    return const_iterator(data_);
   }
   AL_NODISCARD constexpr auto cend() const noexcept -> const_iterator {
-    return current_;
+    return const_iterator(current_);
   }
   AL_NODISCARD constexpr auto rbegin() noexcept -> reverse_iterator {
     return reverse_iterator(end());
@@ -647,17 +682,17 @@ namespace std {
 template <typename Type, typename Ally>
 constexpr auto distance(
     const typename al::ArrayList<Type, Ally>::iterator first,
-    const typename al::ArrayList<Type, Ally>::iterator second)
-    -> al::ArrayList<Type, Ally>::size_type {
-  using MySizeType = al::ArrayList<Type, Ally>::size_type;
+    const typename al::ArrayList<Type, Ally>::iterator second) ->
+    typename al::ArrayList<Type, Ally>::size_type {
+  using MySizeType = typename al::ArrayList<Type, Ally>::size_type;
   return static_cast<MySizeType>(second - first);
 }
 template <typename Type, typename Ally>
 constexpr auto distance(
     const typename al::ArrayList<Type, Ally>::const_iterator first,
-    const typename al::ArrayList<Type, Ally>::const_iterator second)
-    -> al::ArrayList<Type, Ally>::size_type {
-  using MySizeType = al::ArrayList<Type, Ally>::size_type;
+    const typename al::ArrayList<Type, Ally>::const_iterator second) ->
+    typename al::ArrayList<Type, Ally>::size_type {
+  using MySizeType = typename al::ArrayList<Type, Ally>::size_type;
   return static_cast<MySizeType>(second - first);
 }
 }  // namespace std
