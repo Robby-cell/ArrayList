@@ -344,11 +344,6 @@ class ArrayList
   constexpr explicit ArrayList(const Container& container,
                                const allocator_type& alloc = allocator_type())
       : ArrayList(container.begin(), container.end(), alloc) {}
-  template <CONSTRAINT(IterableContainer) Container,
-            std::enable_if_t<true, int> = 0>
-  constexpr explicit ArrayList(Container&& container,
-                               const allocator_type& alloc = allocator_type())
-      : ArrayList(container.begin(), container.end(), alloc) {}
 
   constexpr ArrayList(const ArrayList& other,
                       const allocator_type& alloc = allocator_type())
