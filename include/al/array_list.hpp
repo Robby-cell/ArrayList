@@ -1,8 +1,6 @@
 #ifndef ARRAY_LIST_HPP
 #define ARRAY_LIST_HPP
 
-#include <vcruntime_typeinfo.h>
-
 #include <initializer_list>
 #include <iterator>
 #include <memory>
