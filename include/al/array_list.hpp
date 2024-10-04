@@ -17,8 +17,8 @@ namespace al {
 
 template <typename Container>
 concept IterableContainer = requires(Container c) {
-  c.begin();
-  c.end();
+  std::begin(c);
+  std::end(c);
 };
 
 consteval auto operator""_UZ(const unsigned long long value) -> size_t {
