@@ -550,9 +550,10 @@ class ArrayList
   constexpr void copy_unsafe(const ArrayList& other) {
     const auto length{other.size()};
     current_ = data_ + length;
-    for (auto i = 0_UZ; i < length; ++i) {
-      new (data_ + i) value_type(other.data_[i]);
-    }
+    // for (auto i = 0_UZ; i < length; ++i) {
+    //   new (data_ + i) value_type(other.data_[i]);
+    // }
+    std::uninitialized_copy_n(other.data_, length, data_);
   }
 
   constexpr void ensure_in_range(const size_type index) const {
