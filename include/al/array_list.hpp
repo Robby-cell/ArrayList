@@ -459,7 +459,7 @@ class ArrayList
     if (old_ptr) {
       if (len > 0) {
         // std::copy(old_ptr, old_ptr + len, data_);
-        std::memcpy(data_, old_ptr, len * sizeof(Type));
+        std::memmove(data_, old_ptr, len * sizeof(Type));
         // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
       }
       if (cap > 0) {
