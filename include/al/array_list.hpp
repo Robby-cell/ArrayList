@@ -10,7 +10,7 @@
 
 #define HAS_CONCEPTS (HAS_CXX20)
 
-#include <cstring>  // memcpy
+#include <cstring>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
