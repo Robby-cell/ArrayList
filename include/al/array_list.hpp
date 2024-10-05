@@ -10,6 +10,7 @@
 
 #define HAS_CONCEPTS (HAS_CXX20)
 
+#include <algorithm>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -457,7 +458,8 @@ class ArrayList
     raw_reserve(new_capacity);
     if (old_ptr) {
       if (len > 0) {
-        std::memcpy(data_, old_ptr, len * sizeof(Type));
+        std::copy(old_ptr, old_ptr + len, data_);
+        // std::memcpy(data_, old_ptr, len * sizeof(Type));
         // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
       }
       if (cap > 0) {
