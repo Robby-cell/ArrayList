@@ -1,6 +1,7 @@
 #ifndef ARRAY_LIST_HPP
 #define ARRAY_LIST_HPP
 
+#include <algorithm>
 #define HAS_CXX20 (__cplusplus >= 202002UL)
 #define HAS_CXX17 (__cplusplus >= 201703UL)
 
@@ -325,7 +326,10 @@ class ArrayList
   }
 
  public:
-  constexpr explicit ArrayList(const size_type capacity = 8_UZ,
+  constexpr ArrayList() noexcept
+      : data_(nullptr), end_(nullptr), current_(nullptr) {}
+
+  constexpr explicit ArrayList(const size_type capacity,
                                const allocator_type& alloc = allocator_type())
       : allocator_type(alloc),
         data_(allocator_traits::allocate(get_allocator(), capacity)) {
@@ -444,7 +448,7 @@ class ArrayList
     // for (; tmp < current_; ++tmp) {
     //   new (tmp) value_type();
     // }
-    std::uninitialized_value_construct_n(tmp, new_size);
+    std::uninitialized_value_construct_n(tmp, current_ - tmp);
   }
 
   void reserve(const size_type new_capacity) {
@@ -459,10 +463,12 @@ class ArrayList
     if (old_ptr) {
       if (len > 0) {
         // std::copy(old_ptr, old_ptr + len, data_);
-        std::memmove(data_, old_ptr, len * sizeof(Type));
+        // std::memmove(data_, old_ptr, len * sizeof(Type));
         // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
+        std::uninitialized_move_n(old_ptr, len, data_);
       }
       if (cap > 0) {
+        detail::destroy_range(old_ptr, old_ptr + len);
         deallocate_target_ptr(old_ptr, cap);
       }
     }
@@ -567,9 +573,10 @@ class ArrayList
       throw std::out_of_range("Index out of range");
     }
     const auto length = size();
-    for (auto i = index; i < length - 1; ++i) {
-      data_[i] = std::move(data_[i + 1]);
-    }
+    // for (auto i = index; i < length - 1; ++i) {
+    //   data_[i] = std::move(data_[i + 1]);
+    // }
+    std::move(data_ + index + 1, data_ + length + 1, data_ + index);
     --current_;
     return data_ + index;
   }
@@ -658,6 +665,10 @@ class ArrayList
     raw_push_into(current_++, std::move(value));
   }
 
+  template <typename It, typename Sentinel>
+  constexpr auto destroy_range(It begin, Sentinel end) {
+    return detail::destroy_range(begin, end);
+  }
   constexpr inline auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
       detail::destroy_range(data_, current_);

@@ -57,13 +57,13 @@ TEST_CASE("Iterators with non-trivial types") {
 
     list.emplace_back();
     list.emplace_back();
-    REQUIRE(x == 0);
+    REQUIRE(x == 1);
   }
 
   SECTION(
       "Make sure no items are destroyed that haven't been constructed and "
       "items that are constructed are destroyed") {
-    REQUIRE(x == 2);
+    REQUIRE(x == 3);
   }
 }
 
