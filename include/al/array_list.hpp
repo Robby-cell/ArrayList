@@ -700,16 +700,4 @@ class ArrayList
 
 }  // namespace al
 
-template <typename Type, typename Ally>
-[[nodiscard]] CONSTEXPR_CXX17 auto distance(
-    typename al::ArrayList<Type, Ally>::const_iterator first,
-    typename al::ArrayList<Type, Ally>::const_iterator second) ->
-    typename std::iterator_traits<
-        typename al::ArrayList<Type, Ally>::const_iterator>::difference_type {
-  using std::distance;
-  using MyDiffType = typename std::iterator_traits<
-      typename al::ArrayList<Type, Ally>::const_iterator>::difference_type;
-  return static_cast<MyDiffType>(second - first);
-}
-
 #endif  // ARRAY_LIST_HPP
