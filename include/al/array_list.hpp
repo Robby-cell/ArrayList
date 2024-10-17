@@ -9,6 +9,12 @@
 #error "This library requires C++17 or higher"
 #endif
 
+#if HAS_CXX17
+#define CONSTEXPR_CXX17 constexpr
+#else
+#define CONSTEXPR_CXX17 inline
+#endif
+
 #define HAS_CONCEPTS (HAS_CXX20)
 
 #include <cstring>
@@ -150,6 +156,9 @@ constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
 
 template <typename ArrayList>
 struct ArrayListConstIterator {
+ private:
+  using Self = ArrayListConstIterator;
+
  public:
   // NOLINTBEGIN
   using iterator_category = std::random_access_iterator_tag;
@@ -172,8 +181,8 @@ struct ArrayListConstIterator {
     return *this;
   }
   constexpr auto operator++(int) noexcept -> ArrayListConstIterator {
-    const auto tmp = *this;
-    this->operator++();
+    auto tmp = *this;
+    Self::operator++();
     return tmp;
   }
   constexpr auto operator--() noexcept -> ArrayListConstIterator& {
@@ -181,8 +190,8 @@ struct ArrayListConstIterator {
     return *this;
   }
   constexpr auto operator--(int) noexcept -> ArrayListConstIterator {
-    const auto tmp = *this;
-    this->operator--();
+    auto tmp = *this;
+    Self::operator--();
     return tmp;
   }
 
@@ -192,7 +201,7 @@ struct ArrayListConstIterator {
   }
   AL_NODISCARD constexpr auto operator==(
       const ArrayListConstIterator& other) const& noexcept {
-    return ptr_ == other.ptr_;
+    return !Self::operator!=(other);
   }
 
   AL_NODISCARD constexpr auto operator-(
@@ -213,6 +222,7 @@ struct ArrayListConstIterator {
 template <typename ArrayList>
 struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
  private:
+  using Self = ArrayListIterator;
   using Base = ArrayListConstIterator<ArrayList>;
 
  public:
@@ -230,17 +240,19 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
   // NOLINTEND
 
   AL_NODISCARD constexpr auto operator*() const noexcept -> reference {
-    return *Base::ptr_;
+    return const_cast<reference>(Base::operator*());
   }
-  constexpr auto operator->() const noexcept -> pointer { return Base::ptr_; }
+  constexpr auto operator->() const noexcept -> pointer {
+    return const_cast<pointer>(Base::operator->());
+  }
 
   constexpr auto operator++() noexcept -> ArrayListIterator& {
     Base::operator++();
     return *this;
   }
   constexpr auto operator++(int) noexcept -> ArrayListIterator {
-    const auto tmp = *this;
-    Base::operator++();
+    auto tmp = *this;
+    Self::operator++();
     return tmp;
   }
   constexpr auto operator--() noexcept -> ArrayListIterator& {
@@ -248,8 +260,8 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
     return *this;
   }
   constexpr auto operator--(int) noexcept -> ArrayListIterator {
-    const auto tmp = *this;
-    Base::operator--();
+    auto tmp = *this;
+    Self::operator--();
     return *this;
   }
 
@@ -264,7 +276,7 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
   }
   AL_NODISCARD constexpr auto operator==(
       const ArrayListIterator& other) const& noexcept {
-    return Base::operator==(other);
+    return !Self::operator!=(other);
   }
 };
 
@@ -287,7 +299,7 @@ class ArrayList
 
  public:
   using value_type = Type;
-  using allocator_type = Allocator;
+  using allocator_type = Alty;
   using pointer = typename allocator_traits::pointer;
   using const_pointer = typename allocator_traits::const_pointer;
   using reference = Type&;
@@ -340,8 +352,8 @@ class ArrayList
   constexpr ArrayList(Iter first, Iter last,
                       const allocator_type& alloc = allocator_type())
       : allocator_type(alloc) {
-    const auto ufirst = detail::get_unwrapped(first);
-    const auto ulast = detail::get_unwrapped(last);
+    const auto ufirst = detail::get_unwrapped(first);  // NOLINT
+    const auto ulast = detail::get_unwrapped(last);    // NOLINT
 
     const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
 
@@ -364,9 +376,10 @@ class ArrayList
   constexpr ArrayList(const ArrayList& other,
                       const allocator_type& alloc = allocator_type())
       : ArrayList(other.begin(), other.end(), alloc) {}
-  constexpr ArrayList(ArrayList&& other) noexcept : ArrayList(0) {
-    swap_with_other(other);
-  }
+  constexpr ArrayList(ArrayList&& other) noexcept
+      : data_(std::exchange(other.data_, nullptr)),
+        current_(std::exchange(other.current_, nullptr)),
+        end_(std::exchange(other.end_, nullptr)) {}
 
   constexpr auto operator=(const ArrayList& other) -> ArrayList& {
     if (this not_eq std::addressof(other)) {
@@ -375,7 +388,12 @@ class ArrayList
     return *this;
   }
   constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
-    swap_with_other(other);
+    destruct_all_elements();
+    deallocate_ptr();
+
+    data_ = std::exchange(other.data_, nullptr);
+    current_ = std::exchange(other.current_, nullptr);
+    end_ = std::exchange(other.end_, nullptr);
 
     return *this;
   }
@@ -433,9 +451,6 @@ class ArrayList
   {
     const auto len = size();
     if (new_size < len) {
-      // for (auto i = new_size; i < len; ++i) {
-      //   data_[i].~value_type();
-      // }
       std::destroy_n(data_ + new_size, len - new_size);
     }
 
@@ -445,9 +460,6 @@ class ArrayList
     auto* tmp = current_;
     current_ = data_ + new_size;
 
-    // for (; tmp < current_; ++tmp) {
-    //   new (tmp) value_type();
-    // }
     std::uninitialized_value_construct_n(tmp, current_ - tmp);
   }
 
@@ -461,13 +473,10 @@ class ArrayList
     const auto old_ptr = data_;
     raw_reserve(new_capacity);
     if (old_ptr) {
-      if (len > 0) {
-        // std::copy(old_ptr, old_ptr + len, data_);
-        // std::memmove(data_, old_ptr, len * sizeof(Type));
-        // std::uninitialized_copy(old_ptr, old_ptr + len, data_);
-        std::uninitialized_move_n(old_ptr, len, data_);
-      }
       if (cap > 0) {
+        if (len > 0) {
+          std::uninitialized_move_n(old_ptr, len, data_);
+        }
         detail::destroy_range(old_ptr, old_ptr + len);
         deallocate_target_ptr(old_ptr, cap);
       }
@@ -573,9 +582,6 @@ class ArrayList
       throw std::out_of_range("Index out of range");
     }
     const auto length = size();
-    // for (auto i = index; i < length - 1; ++i) {
-    //   data_[i] = std::move(data_[i + 1]);
-    // }
     std::move(data_ + index + 1, data_ + length + 1, data_ + index);
     --current_;
     return data_ + index;
@@ -600,9 +606,6 @@ class ArrayList
   constexpr void copy_unsafe(const ArrayList& other) {
     const auto length{other.size()};
     current_ = data_ + length;
-    // for (auto i = 0_UZ; i < length; ++i) {
-    //   new (data_ + i) value_type(other.data_[i]);
-    // }
     std::uninitialized_copy_n(other.data_, length, data_);
   }
 
@@ -697,23 +700,16 @@ class ArrayList
 
 }  // namespace al
 
-namespace std {
 template <typename Type, typename Ally>
-constexpr auto distance(
-    const typename al::ArrayList<Type, Ally>::iterator first,
-    const typename al::ArrayList<Type, Ally>::iterator second) ->
-    typename al::ArrayList<Type, Ally>::size_type {
-  using MySizeType = typename al::ArrayList<Type, Ally>::size_type;
-  return static_cast<MySizeType>(second - first);
+[[nodiscard]] CONSTEXPR_CXX17 auto distance(
+    typename al::ArrayList<Type, Ally>::const_iterator first,
+    typename al::ArrayList<Type, Ally>::const_iterator second) ->
+    typename std::iterator_traits<
+        typename al::ArrayList<Type, Ally>::const_iterator>::difference_type {
+  using std::distance;
+  using MyDiffType = typename std::iterator_traits<
+      typename al::ArrayList<Type, Ally>::const_iterator>::difference_type;
+  return static_cast<MyDiffType>(second - first);
 }
-template <typename Type, typename Ally>
-constexpr auto distance(
-    const typename al::ArrayList<Type, Ally>::const_iterator first,
-    const typename al::ArrayList<Type, Ally>::const_iterator second) ->
-    typename al::ArrayList<Type, Ally>::size_type {
-  using MySizeType = typename al::ArrayList<Type, Ally>::size_type;
-  return static_cast<MySizeType>(second - first);
-}
-}  // namespace std
 
 #endif  // ARRAY_LIST_HPP
