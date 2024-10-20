@@ -532,12 +532,6 @@ class ArrayList {
   AL_NODISCARD constexpr auto end() noexcept -> iterator {
     return iterator(compressed_.current);
   }
-  AL_NODISCARD constexpr auto cbegin() noexcept -> iterator {
-    return iterator(compressed_.data);
-  }
-  AL_NODISCARD constexpr auto cend() noexcept -> iterator {
-    return iterator(compressed_.current);
-  }
   AL_NODISCARD constexpr auto begin() const noexcept -> const_iterator {
     return const_iterator(compressed_.data);
   }
@@ -562,6 +556,13 @@ class ArrayList {
   }
   AL_NODISCARD constexpr auto rend() const noexcept -> const_reverse_iterator {
     return const_reverse_iterator(begin());
+  }
+  AL_NODISCARD constexpr auto crbegin() const noexcept
+      -> const_reverse_iterator {
+    return rbegin();
+  }
+  AL_NODISCARD constexpr auto crend() const noexcept -> const_reverse_iterator {
+    return rend();
   }
 
   constexpr auto clear() noexcept -> void {
