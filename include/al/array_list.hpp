@@ -296,17 +296,17 @@ class ArrayList {
   // NOLINTBEGIN
   using Alty =
       typename std::allocator_traits<Allocator>::template rebind_alloc<Type>;
-  using allocator_traits = std::allocator_traits<Alty>;
+  using AltyTraits = std::allocator_traits<Alty>;
 
  public:
   using value_type = Type;
   using allocator_type = Alty;
-  using pointer = typename allocator_traits::pointer;
-  using const_pointer = typename allocator_traits::const_pointer;
+  using pointer = typename AltyTraits::pointer;
+  using const_pointer = typename AltyTraits::const_pointer;
   using reference = Type&;
   using const_reference = const Type&;
-  using size_type = typename allocator_traits::size_type;
-  using difference_type = typename allocator_traits::difference_type;
+  using size_type = typename AltyTraits::size_type;
+  using difference_type = typename AltyTraits::difference_type;
   using iterator = ArrayListIterator<ArrayList>;
   using const_iterator = ArrayListConstIterator<ArrayList>;
   using reverse_iterator = std::reverse_iterator<iterator>;
@@ -343,8 +343,7 @@ class ArrayList {
 
   constexpr explicit ArrayList(const size_type capacity,
                                const allocator_type& alloc = allocator_type())
-      : compressed_(allocator_traits::allocate(get_allocator(), capacity),
-                    alloc) {
+      : compressed_(AltyTraits::allocate(get_allocator(), capacity), alloc) {
     compressed_.end = compressed_.data + capacity;
     compressed_.current = compressed_.data;
   }
@@ -357,7 +356,7 @@ class ArrayList {
 
     const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
 
-    compressed_.data = allocator_traits::allocate(get_allocator(), length);
+    compressed_.data = AltyTraits::allocate(get_allocator(), length);
     compressed_.end = compressed_.data + length;
     compressed_.current = compressed_.data + length;
 
@@ -590,7 +589,7 @@ class ArrayList {
  private:
   constexpr void raw_reserve(const size_type capacity) {
     const auto length = size();
-    compressed_.data = allocator_traits::allocate(get_allocator(), capacity);
+    compressed_.data = AltyTraits::allocate(get_allocator(), capacity);
     compressed_.current = compressed_.data + length;
     compressed_.end = compressed_.data + capacity;
   }
@@ -646,15 +645,15 @@ class ArrayList {
   template <typename... Args>
   constexpr auto raw_emplace_into(value_type* const my_ptr,
                                   Args&&... args) -> value_type& {
-    new (my_ptr) value_type(std::forward<Args>(args)...);
+    AltyTraits::construct(compressed_, my_ptr, std::forward<Args>(args)...);
     return *my_ptr;
   }
   constexpr auto raw_push_into(value_type* const my_ptr,
                                const Type& value) -> void {
-    new (my_ptr) value_type(value);
+    AltyTraits::construct(compressed_, my_ptr, value);
   }
   constexpr auto raw_push_into(value_type* const my_ptr, Type&& value) -> void {
-    new (my_ptr) value_type(std::move(value));
+    AltyTraits::construct(compressed_, my_ptr, std::move(value));
   }
 
   template <typename... Args>
@@ -680,7 +679,7 @@ class ArrayList {
   constexpr auto deallocate_target_ptr(value_type* const ptr,
                                        const size_type length) -> void {
     if (ptr) {
-      allocator_traits::deallocate(get_allocator(), ptr, length);
+      AltyTraits::deallocate(get_allocator(), ptr, length);
     }
   }
   constexpr auto deallocate_ptr() -> void {
