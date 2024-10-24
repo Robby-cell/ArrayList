@@ -14,6 +14,12 @@
 #define CONSTEXPR_CXX17 inline
 #endif
 
+#if HAS_CXX20
+#define CONSTEXPR_CXX20 constexpr
+#else
+#define CONSTCONSTEXPR_CXX20
+#endif
+
 #define HAS_CONCEPTS (HAS_CXX20)
 
 #include <algorithm>
@@ -130,29 +136,29 @@ struct IterType<Iter[]> {
   using value_type = Iter;  // NOLINT
 };
 
-template <typename Iter, typename Sentinel>
-constexpr auto destroy_range(Iter first, Sentinel last) noexcept;
+// template <typename Iter, typename Sentinel>
+// constexpr auto destroy_range(Iter first, Sentinel last) noexcept;
 
-template <typename Type>
-constexpr auto destroy_in_place(Type* value) noexcept {
-  if constexpr (std::is_array_v<Type>) {
-    for (auto& element : *value) {
-      (destroy_in_place)(std::addressof(element));
-    }
-  } else {
-    value->~Type();
-  }
-}
+// template <typename Type>
+// constexpr auto destroy_in_place(Type* value) noexcept {
+//   if constexpr (std::is_array_v<Type>) {
+//     for (auto& element : *value) {
+//       (destroy_in_place)(std::addressof(element));
+//     }
+//   } else {
+//     value->~Type();
+//   }
+// }
 
-template <typename Iter, typename Sentinel>
-constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
-  if constexpr (not std::is_trivially_destructible_v<
-                    typename IterType<Iter>::value_type>) {
-    for (; first != last; ++first) {
-      destroy_in_place(std::addressof(*first));
-    }
-  }
-}
+// template <typename Iter, typename Sentinel>
+// constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
+//   if constexpr (not std::is_trivially_destructible_v<
+//                     typename IterType<Iter>::value_type>) {
+//     for (; first != last; ++first) {
+//       destroy_in_place(std::addressof(*first));
+//     }
+//   }
+// }
 
 }  // namespace detail
 
@@ -341,15 +347,15 @@ class ArrayList {
  public:
   constexpr ArrayList() noexcept : compressed_() {}
 
-  constexpr explicit ArrayList(const size_type capacity,
-                               const allocator_type& alloc = allocator_type())
+  CONSTEXPR_CXX20 explicit ArrayList(
+      const size_type capacity, const allocator_type& alloc = allocator_type())
       : compressed_(AltyTraits::allocate(get_allocator(), capacity), alloc) {
     compressed_.end = compressed_.data + capacity;
     compressed_.current = compressed_.data;
   }
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  constexpr ArrayList(Iter first, Iter last,
-                      const allocator_type& alloc = allocator_type())
+  CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
+                            const allocator_type& alloc = allocator_type())
       : compressed_(alloc) {
     const auto ufirst = detail::get_unwrapped(first);  // NOLINT
     const auto ulast = detail::get_unwrapped(last);    // NOLINT
@@ -363,22 +369,23 @@ class ArrayList {
     std::uninitialized_copy(ufirst, ulast, compressed_.data);
   }
 
-  constexpr ArrayList(std::initializer_list<Type> list,
-                      const allocator_type& alloc = allocator_type())
+  CONSTEXPR_CXX20 ArrayList(std::initializer_list<Type> list,
+                            const allocator_type& alloc = allocator_type())
       : ArrayList(list.begin(), list.end(), alloc) {}
 
   template <CONSTRAINT(IterableContainer) Container>
-  constexpr explicit ArrayList(const Container& container,
-                               const allocator_type& alloc = allocator_type())
+  CONSTEXPR_CXX20 explicit ArrayList(
+      const Container& container,
+      const allocator_type& alloc = allocator_type())
       : ArrayList(container.begin(), container.end(), alloc) {}
 
-  constexpr ArrayList(const ArrayList& other,
-                      const allocator_type& alloc = allocator_type())
+  CONSTEXPR_CXX20 ArrayList(const ArrayList& other,
+                            const allocator_type& alloc = allocator_type())
       : ArrayList(other.begin(), other.end(), alloc) {}
   constexpr ArrayList(ArrayList&& other) noexcept
-      : compressed_(other.compressed_, Compressed()) {}
+      : compressed_(std::exchange(other.compressed_, Compressed())) {}
 
-  constexpr auto operator=(const ArrayList& other) -> ArrayList& {
+  CONSTEXPR_CXX20 auto operator=(const ArrayList& other) -> ArrayList& {
     if (this not_eq std::addressof(other)) {
       copy_safe(other);
     }
@@ -393,7 +400,7 @@ class ArrayList {
     return *this;
   }
 
-  ~ArrayList() {
+  CONSTEXPR_CXX20 ~ArrayList() {
     destruct_all_elements();
     deallocate_ptr();
   }
@@ -403,7 +410,7 @@ class ArrayList {
   }
 
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  constexpr auto push_back(Iter first, Iter last) -> void {
+  CONSTEXPR_CXX20 auto push_back(Iter first, Iter last) -> void {
     const auto ufirst = detail::get_unwrapped(first);
     const auto ulast = detail::get_unwrapped(last);
 
@@ -414,21 +421,21 @@ class ArrayList {
     compressed_.current += length;
   }
 
-  auto push_back(const Type& value) -> void {
+  CONSTEXPR_CXX20 auto push_back(const Type& value) -> void {
     ensure_size_for_elements(1_UZ);
     raw_push_back(value);
   }
-  auto push_back(Type&& value) -> void {
+  CONSTEXPR_CXX20 auto push_back(Type&& value) -> void {
     ensure_size_for_elements(1_UZ);
     raw_push_back(std::move(value));
   }
   template <typename... Args>
-  auto emplace_back(Args&&... args) -> value_type& {
+  CONSTEXPR_CXX20 auto emplace_back(Args&&... args) -> value_type& {
     ensure_size_for_elements(1_UZ);
     return raw_emplace_back(std::forward<Args>(args)...);
   }
 
-  constexpr void pop_back() {
+  CONSTEXPR_CXX20 void pop_back() {
     ensure_not_empty();
     // destroy it!
     compressed_.current->~value_type();
@@ -439,7 +446,7 @@ class ArrayList {
     return compressed_.current - compressed_.data;
   }
 
-  void resize(const size_type new_size)
+  CONSTEXPR_CXX20 void resize(const size_type new_size)
 #if HAS_CONCEPTS
     requires(std::is_constructible_v<value_type>)
 #endif
@@ -458,7 +465,7 @@ class ArrayList {
     std::uninitialized_value_construct_n(tmp, compressed_.current - tmp);
   }
 
-  void reserve(const size_type new_capacity) {
+  CONSTEXPR_CXX20 void reserve(const size_type new_capacity) {
     const auto cap = capacity();
     if (cap >= new_capacity) {
       return;
@@ -472,7 +479,7 @@ class ArrayList {
         if (len > 0) {
           std::uninitialized_move_n(old_ptr, len, compressed_.data);
         }
-        detail::destroy_range(old_ptr, old_ptr + len);
+        destroy_range(old_ptr, old_ptr + len);
         deallocate_target_ptr(old_ptr, cap);
       }
     }
@@ -564,18 +571,18 @@ class ArrayList {
     return rend();
   }
 
-  constexpr auto clear() noexcept -> void {
+  CONSTEXPR_CXX20 auto clear() noexcept -> void {
     destruct_all_elements();
     compressed_.current = compressed_.data;
   }
 
-  constexpr auto erase(const_iterator position) -> iterator {
+  CONSTEXPR_CXX20 auto erase(const_iterator position) -> iterator {
     const auto index = static_cast<size_type>(position - begin());
     erase(index);
     return begin() + index;
   }
 
-  constexpr auto erase(const size_type index) -> iterator {
+  CONSTEXPR_CXX20 auto erase(const size_type index) -> iterator {
     if (index >= size() or size() == 0) {
       throw std::out_of_range("Index out of range");
     }
@@ -587,14 +594,14 @@ class ArrayList {
   }
 
  private:
-  constexpr void raw_reserve(const size_type capacity) {
+  CONSTEXPR_CXX20 void raw_reserve(const size_type capacity) {
     const auto length = size();
     compressed_.data = AltyTraits::allocate(get_allocator(), capacity);
     compressed_.current = compressed_.data + length;
     compressed_.end = compressed_.data + capacity;
   }
 
-  constexpr void copy_safe(const ArrayList& other) {
+  CONSTEXPR_CXX20 void copy_safe(const ArrayList& other) {
     destruct_all_elements();
     deallocate_ptr();
 
@@ -602,7 +609,7 @@ class ArrayList {
     copy_unsafe(other);
   }
 
-  constexpr void copy_unsafe(const ArrayList& other) {
+  CONSTEXPR_CXX20 void copy_unsafe(const ArrayList& other) {
     const auto length{other.size()};
     compressed_.current = compressed_.data + length;
     std::uninitialized_copy_n(other.compressed_.data, length, compressed_.data);
@@ -620,69 +627,88 @@ class ArrayList {
     }
   }
 
-  void ensure_size_for_elements(const size_type elements) {
+  CONSTEXPR_CXX20 void ensure_size_for_elements(const size_type elements) {
     while ((compressed_.current + elements) > compressed_.end) {
       grow_capacity();
     }
   }
-  void grow_capacity() {
+  CONSTEXPR_CXX20 void grow_capacity() {
     const auto new_capacity = capacity() + 1;
     const auto growth = calculate_growth(new_capacity);
     reserve(growth);
   }
 
   template <typename... Args>
-  constexpr auto raw_emplace_back(Args&&... args) -> value_type& {
+  CONSTEXPR_CXX20 auto raw_emplace_back(Args&&... args) -> value_type& {
     return emplace_at_back(std::forward<Args>(args)...);
   }
-  constexpr auto raw_push_back(const Type& value) -> void {
+  CONSTEXPR_CXX20 auto raw_push_back(const Type& value) -> void {
     push_at_back(value);
   }
-  constexpr auto raw_push_back(Type&& value) -> void {
+  CONSTEXPR_CXX20 auto raw_push_back(Type&& value) -> void {
     push_at_back(std::move(value));
   }
 
   template <typename... Args>
-  constexpr auto raw_emplace_into(value_type* const my_ptr,
-                                  Args&&... args) -> value_type& {
-    AltyTraits::construct(compressed_, my_ptr, std::forward<Args>(args)...);
+  CONSTEXPR_CXX20 auto raw_emplace_into(value_type* const my_ptr,
+                                        Args&&... args) -> value_type& {
+    AltyTraits::construct(get_allocator(), my_ptr, std::forward<Args>(args)...);
     return *my_ptr;
   }
-  constexpr auto raw_push_into(value_type* const my_ptr,
-                               const Type& value) -> void {
-    AltyTraits::construct(compressed_, my_ptr, value);
+  CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr,
+                                     const Type& value) -> void {
+    AltyTraits::construct(get_allocator(), my_ptr, value);
   }
-  constexpr auto raw_push_into(value_type* const my_ptr, Type&& value) -> void {
-    AltyTraits::construct(compressed_, my_ptr, std::move(value));
+  CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr,
+                                     Type&& value) -> void {
+    AltyTraits::construct(get_allocator(), my_ptr, std::move(value));
   }
 
   template <typename... Args>
-  constexpr auto emplace_at_back(Args&&... args) -> value_type& {
+  CONSTEXPR_CXX20 auto emplace_at_back(Args&&... args) -> value_type& {
     return raw_emplace_into(compressed_.current++, std::forward<Args>(args)...);
   }
-  constexpr auto push_at_back(const Type& value) -> void {
+  CONSTEXPR_CXX20 auto push_at_back(const Type& value) -> void {
     raw_push_into(compressed_.current++, value);
   }
-  constexpr auto push_at_back(Type&& value) -> void {
+  CONSTEXPR_CXX20 auto push_at_back(Type&& value) -> void {
     raw_push_into(compressed_.current++, std::move(value));
   }
 
-  template <typename It, typename Sentinel>
-  constexpr auto destroy_range(It begin, Sentinel end) {
-    return detail::destroy_range(begin, end);
-  }
-  constexpr inline auto destruct_all_elements() -> void {
-    if constexpr (not std::is_trivially_destructible_v<Type>) {
-      detail::destroy_range(compressed_.data, compressed_.current);
+  //
+  CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept {
+    if constexpr (std::is_array_v<Type>) {
+      for (auto& element : *value) {
+        (destroy_in_place)(std::addressof(element));
+      }
+    } else {
+      AltyTraits::destroy(get_allocator(), value);
+      // value->~Type();
     }
   }
-  constexpr auto deallocate_target_ptr(value_type* const ptr,
-                                       const size_type length) -> void {
+
+  template <typename It, typename Sentinel>
+  CONSTEXPR_CXX20 auto destroy_range(It first, Sentinel last) {
+    // return detail::destroy_range(begin, end);
+    if constexpr (not std::is_trivially_destructible_v<Type>) {
+      for (; first != last; ++first) {
+        destroy_in_place(std::addressof(*first));
+      }
+    }
+  }
+
+  CONSTEXPR_CXX20 auto destruct_all_elements() -> void {
+    if constexpr (not std::is_trivially_destructible_v<Type>) {
+      destroy_range(compressed_.data, compressed_.current);
+    }
+  }
+  CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
+                                             const size_type length) -> void {
     if (ptr) {
       AltyTraits::deallocate(get_allocator(), ptr, length);
     }
   }
-  constexpr auto deallocate_ptr() -> void {
+  CONSTEXPR_CXX20 auto deallocate_ptr() -> void {
     deallocate_target_ptr(data(), capacity());
   }
 
