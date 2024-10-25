@@ -41,6 +41,24 @@
 #define CONSTRAINT(X) typename
 #endif
 
+#if (defined(__clang__) && !defined(_MSC_VER))
+#define CLANG 1
+#else
+#define CLANG 0
+#endif
+
+#if defined(__GNUC__)
+#define GCC
+#else
+#define GCC 0
+#endif
+
+#if defined(_MSC_VER)
+#define MSVC 1
+#else
+#define MSVC 0
+#endif
+
 namespace al {
 
 #if HAS_CXX20
@@ -288,11 +306,25 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
   }
 };
 
+/// \deprecated
+/// This is the difference in size. old capacity + this value is the new
+/// prefered size
+struct ArrayListDefaultGrowthDifference {
+  constexpr auto operator()(const size_t old_capacity) -> size_t {
+#if CLANG || GCC
+    return old_capacity;
+    // return old_capacity / 2;
+#elif MSVC
+    return old_capacity / 2;
+#endif
+  }
+};
+
 template <typename Type, typename Allocator = std::allocator<Type>>
 #if HAS_CONCEPTS
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
 #endif
-class ArrayList {
+class _ArrayList_impl {  // NOLINT
   static_assert(
       std::is_same_v<Type, typename Allocator::value_type>,
       "Requires allocator's type to match the type held by the ArrayList");
@@ -313,8 +345,8 @@ class ArrayList {
   using const_reference = const Type&;
   using size_type = typename AltyTraits::size_type;
   using difference_type = typename AltyTraits::difference_type;
-  using iterator = ArrayListIterator<ArrayList>;
-  using const_iterator = ArrayListConstIterator<ArrayList>;
+  using iterator = ArrayListIterator<_ArrayList_impl>;
+  using const_iterator = ArrayListConstIterator<_ArrayList_impl>;
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
   // NOLINTEND
@@ -328,9 +360,24 @@ class ArrayList {
       -> size_type {
     const auto old_capacity = capacity();
 
+    // #if CLANG || GCC
+    //     if (new_size > max_size() - old_capacity) {
+    //       return max_size();
+    //     }
+    // #elif MSVC
+    //     if (new_size > max_size() - old_capacity / 2) {
+    //       return max_size();
+    //     }
+    // #endif
     if (new_size > max_size() - old_capacity / 2) {
       return max_size();
     }
+
+    // #if CLANG || GCC
+    //     const auto growth = old_capacity * 2;
+    // #elif MSVC
+    //     const auto growth = old_capacity + old_capacity / 2;
+    // #endif
     const auto growth = old_capacity + old_capacity / 2;
 
     if (growth < new_size) {
@@ -345,17 +392,17 @@ class ArrayList {
   }
 
  public:
-  constexpr ArrayList() noexcept : compressed_() {}
+  constexpr _ArrayList_impl() noexcept : compressed_() {}
 
-  CONSTEXPR_CXX20 explicit ArrayList(
+  CONSTEXPR_CXX20 explicit _ArrayList_impl(
       const size_type capacity, const allocator_type& alloc = allocator_type())
       : compressed_(AltyTraits::allocate(get_allocator(), capacity), alloc) {
     compressed_.end = compressed_.data + capacity;
     compressed_.current = compressed_.data;
   }
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
-                            const allocator_type& alloc = allocator_type())
+  CONSTEXPR_CXX20 _ArrayList_impl(
+      Iter first, Iter last, const allocator_type& alloc = allocator_type())
       : compressed_(alloc) {
     const auto ufirst = detail::get_unwrapped(first);  // NOLINT
     const auto ulast = detail::get_unwrapped(last);    // NOLINT
@@ -369,29 +416,33 @@ class ArrayList {
     std::uninitialized_copy(ufirst, ulast, compressed_.data);
   }
 
-  CONSTEXPR_CXX20 ArrayList(std::initializer_list<Type> list,
-                            const allocator_type& alloc = allocator_type())
-      : ArrayList(list.begin(), list.end(), alloc) {}
+  CONSTEXPR_CXX20 _ArrayList_impl(
+      std::initializer_list<Type> list,
+      const allocator_type& alloc = allocator_type())
+      : _ArrayList_impl(list.begin(), list.end(), alloc) {}
 
   template <CONSTRAINT(IterableContainer) Container>
-  CONSTEXPR_CXX20 explicit ArrayList(
+  CONSTEXPR_CXX20 explicit _ArrayList_impl(
       const Container& container,
       const allocator_type& alloc = allocator_type())
-      : ArrayList(container.begin(), container.end(), alloc) {}
+      : _ArrayList_impl(container.begin(), container.end(), alloc) {}
 
-  CONSTEXPR_CXX20 ArrayList(const ArrayList& other,
-                            const allocator_type& alloc = allocator_type())
-      : ArrayList(other.begin(), other.end(), alloc) {}
-  constexpr ArrayList(ArrayList&& other) noexcept
+  CONSTEXPR_CXX20 _ArrayList_impl(
+      const _ArrayList_impl& other,
+      const allocator_type& alloc = allocator_type())
+      : _ArrayList_impl(other.begin(), other.end(), alloc) {}
+  constexpr _ArrayList_impl(_ArrayList_impl&& other) noexcept
       : compressed_(std::exchange(other.compressed_, Compressed())) {}
 
-  CONSTEXPR_CXX20 auto operator=(const ArrayList& other) -> ArrayList& {
+  CONSTEXPR_CXX20 auto operator=(const _ArrayList_impl& other)
+      -> _ArrayList_impl& {
     if (this not_eq std::addressof(other)) {
       copy_safe(other);
     }
     return *this;
   }
-  constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
+  constexpr auto operator=(_ArrayList_impl&& other) noexcept
+      -> _ArrayList_impl& {
     destruct_all_elements();
     deallocate_ptr();
 
@@ -400,7 +451,7 @@ class ArrayList {
     return *this;
   }
 
-  CONSTEXPR_CXX20 ~ArrayList() {
+  CONSTEXPR_CXX20 ~_ArrayList_impl() {
     destruct_all_elements();
     deallocate_ptr();
   }
@@ -601,7 +652,7 @@ class ArrayList {
     compressed_.end = compressed_.data + capacity;
   }
 
-  CONSTEXPR_CXX20 void copy_safe(const ArrayList& other) {
+  CONSTEXPR_CXX20 void copy_safe(const _ArrayList_impl& other) {
     destruct_all_elements();
     deallocate_ptr();
 
@@ -609,7 +660,7 @@ class ArrayList {
     copy_unsafe(other);
   }
 
-  CONSTEXPR_CXX20 void copy_unsafe(const ArrayList& other) {
+  CONSTEXPR_CXX20 void copy_unsafe(const _ArrayList_impl& other) {
     const auto length{other.size()};
     compressed_.current = compressed_.data + length;
     std::uninitialized_copy_n(other.compressed_.data, length, compressed_.data);
@@ -628,14 +679,19 @@ class ArrayList {
   }
 
   CONSTEXPR_CXX20 void ensure_size_for_elements(const size_type elements) {
-    while ((compressed_.current + elements) > compressed_.end) {
-      grow_capacity();
+    // while ((compressed_.current + elements) > compressed_.end) {
+    //   grow_capacity();
+    // }
+    if (!(size() + elements <= capacity())) {
+      auto new_capacity = calculate_growth(capacity() + elements);
+      reserve(new_capacity);
     }
   }
   CONSTEXPR_CXX20 void grow_capacity() {
-    const auto new_capacity = capacity() + 1;
-    const auto growth = calculate_growth(new_capacity);
-    reserve(growth);
+    // const auto new_capacity = capacity() + 1;
+    // const auto growth = calculate_growth(new_capacity);
+    // reserve(growth);
+    return ensure_size_for_elements(1);
   }
 
   template <typename... Args>
@@ -712,7 +768,7 @@ class ArrayList {
     deallocate_target_ptr(data(), capacity());
   }
 
-  constexpr auto swap_with_other(ArrayList& other) -> void {
+  constexpr auto swap_with_other(_ArrayList_impl& other) -> void {
     std::swap(compressed_, other.compressed_);
   }
 
@@ -731,6 +787,9 @@ class ArrayList {
 
   Compressed compressed_;
 };
+
+template <typename Type, typename Allocator = std::allocator<Type>>
+using ArrayList = _ArrayList_impl<Type, Allocator>;
 
 }  // namespace al
 
