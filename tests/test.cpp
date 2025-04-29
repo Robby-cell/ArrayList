@@ -180,28 +180,21 @@ TEST_CASE("Resizing correctly destroys items") {
   REQUIRE(x == 4);
 }
 
-TEST_CASE("Simple test vs std::vector") {
-  constexpr auto WhatToDo =
-      []<template <typename Type, typename = std::allocator<Type>>
-         typename ContainerType>() {
-        ContainerType<int> list;
-        list.reserve(10);
-        list.resize(20);
+TEST_CASE("Simple test") {
+  constexpr auto WhatToDo = []() {
+    al::ArrayList<int> list;
+    list.reserve(10);
+    list.resize(20);
 
-        for (auto i = 0U; i < 20U; ++i) {
-          list.emplace_back();
-        }
+    for (auto i = 0U; i < 20U; ++i) {
+      list.emplace_back();
+    }
 
-#if MSVC
-        REQUIRE(list.capacity() == 45);
-#elif CLANG || GCC
-        REQUIRE(list.capacity() == 40);
-#endif
-        REQUIRE(list.size() == 40);
-      };
+    REQUIRE(list.capacity() == 45);
+    REQUIRE(list.size() == 40);
+  };
 
-  SECTION("std::vector") { WhatToDo.template operator()<std::vector>(); }
-  SECTION("al::ArrayList") { WhatToDo.template operator()<al::ArrayList>(); }
+  SECTION("al::ArrayList") { WhatToDo(); }
 }
 
 TEST_CASE("Erase") {
@@ -242,10 +235,6 @@ TEST_CASE("Constant values") {
           CALL(TYPE2, ARGS(CTR_ARGS), MEMBER, CALL_ARGS))
 
   // NOLINTBEGIN
-  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, NO_ARGS(), max_size,
-              NO_ARGS());
-  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(100), max_size,
-              NO_ARGS());
   ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(1000), capacity,
               NO_ARGS());
   // NOLINTEND

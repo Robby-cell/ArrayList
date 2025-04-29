@@ -48,7 +48,7 @@
 #endif
 
 #if defined(__GNUC__)
-#define GCC
+#define GCC 1
 #else
 #define GCC 0
 #endif
@@ -155,29 +155,29 @@ struct IterType<Iter[]> {
   using value_type = Iter;  // NOLINT
 };
 
-// template <typename Iter, typename Sentinel>
-// constexpr auto destroy_range(Iter first, Sentinel last) noexcept;
+template <typename Iter, typename Sentinel>
+constexpr auto destroy_range(Iter first, Sentinel last) noexcept;
 
-// template <typename Type>
-// constexpr auto destroy_in_place(Type* value) noexcept {
-//   if constexpr (std::is_array_v<Type>) {
-//     for (auto& element : *value) {
-//       (destroy_in_place)(std::addressof(element));
-//     }
-//   } else {
-//     value->~Type();
-//   }
-// }
+template <typename Type>
+constexpr auto destroy_in_place(Type* value) noexcept {
+  if constexpr (std::is_array_v<Type>) {
+    for (auto& element : *value) {
+      (destroy_in_place)(std::addressof(element));
+    }
+  } else {
+    value->~Type();
+  }
+}
 
-// template <typename Iter, typename Sentinel>
-// constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
-//   if constexpr (not std::is_trivially_destructible_v<
-//                     typename IterType<Iter>::value_type>) {
-//     for (; first != last; ++first) {
-//       destroy_in_place(std::addressof(*first));
-//     }
-//   }
-// }
+template <typename Iter, typename Sentinel>
+constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
+  if constexpr (not std::is_trivially_destructible_v<
+                    typename IterType<Iter>::value_type>) {
+    for (; first != last; ++first) {
+      destroy_in_place(std::addressof(*first));
+    }
+  }
+}
 
 }  // namespace detail
 
@@ -313,9 +313,11 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
 struct ArrayListDefaultGrowthDifference {
   constexpr auto operator()(const size_t old_capacity) -> size_t {
 #if CLANG || GCC
-    return old_capacity;
-    // return old_capacity / 2;
+    // return old_capacity;
+    return old_capacity / 2;
 #elif MSVC
+    return old_capacity / 2;
+#else
     return old_capacity / 2;
 #endif
   }
@@ -382,7 +384,7 @@ class _ArrayList_impl {  // NOLINT
   }
 
   AL_NODISCARD constexpr auto get_allocator() noexcept -> allocator_type& {
-    return static_cast<allocator_type&>(*this);
+    return compressed_;
   }
 
  public:
@@ -398,9 +400,9 @@ class _ArrayList_impl {  // NOLINT
   // NOLINTBEGIN
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
   // NOLINTEND
-  constexpr ArrayList(Iter first, Iter last,
-                      const allocator_type& alloc = allocator_type())
-      : allocator_type(alloc) {
+  constexpr _ArrayList_impl(Iter first, Iter last,
+                            const allocator_type& alloc = allocator_type())
+      : compressed_(alloc) {
     const auto ufirst = detail::get_unwrapped(first);
     const auto ulast = detail::get_unwrapped(last);
 
@@ -454,7 +456,7 @@ class _ArrayList_impl {  // NOLINT
   }
 
   AL_NODISCARD constexpr auto empty() const noexcept -> bool {
-    return data_ == current_;
+    return compressed_.data == compressed_.current;
   }
 
   // NOLINTBEGIN
@@ -529,7 +531,7 @@ class _ArrayList_impl {  // NOLINT
         if (len > 0) {
           std::uninitialized_move_n(old_ptr, len, compressed_.data);
         }
-        destroy_range(old_ptr, old_ptr + len);
+        ::al::detail::destroy_range(old_ptr, old_ptr + len);
         deallocate_target_ptr(old_ptr, cap);
       }
     }
@@ -714,8 +716,8 @@ class _ArrayList_impl {  // NOLINT
       -> void {
     new (my_ptr) value_type(value);
   }
-  CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr,
-                                     Type&& value) -> void {
+  CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr, Type&& value)
+      -> void {
     AltyTraits::construct(get_allocator(), my_ptr, std::move(value));
   }
 
@@ -742,17 +744,9 @@ class _ArrayList_impl {  // NOLINT
     }
   }
 
-  constexpr auto destruct_all_elements() -> void {
-    if constexpr (not std::is_trivially_destructible_v<Type>) {
-      for (; first != last; ++first) {
-        destroy_in_place(std::addressof(*first));
-      }
-    }
-  }
-
   CONSTEXPR_CXX20 auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
-      destroy_range(compressed_.data, compressed_.current);
+      ::al::detail::destroy_range(compressed_.data, compressed_.current);
     }
   }
   CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
