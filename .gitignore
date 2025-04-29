@@ -1,3 +1,8 @@
 /.cache
-/build
+/[Bb]uild
+/[Dd]ebug
+/[Rr]elease
+/[Oo]ut
+/*.tmp
 /compile_commands.json
+/CMakeUserPresets.json

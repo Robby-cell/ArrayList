@@ -95,8 +95,9 @@ constexpr bool HasNothrowUnwrapped<
     noexcept(std::declval<Iter>()._Unwrapped());
 
 template <class Iter>
-constexpr auto get_unwrapped(Iter&& it) noexcept(
-    not IsUnwrappable<Iter> or HasNothrowUnwrapped<Iter>) -> decltype(auto) {
+constexpr auto get_unwrapped(Iter&& it) noexcept(not IsUnwrappable<Iter> or
+                                                 HasNothrowUnwrapped<Iter>)
+    -> decltype(auto) {
   if constexpr (std::is_pointer_v<std::decay_t<Iter>>) {
     return it + 0;
   } else if constexpr (IsUnwrappable<Iter>) {
@@ -311,7 +312,7 @@ class ArrayList
     if (new_size > max_size() - old_capacity / 2) {
       return max_size();
     }
-    const auto growth = old_capacity + old_capacity / 2;
+    const auto growth = old_capacity + (old_capacity / 2);
 
     if (growth < new_size) {
       return new_size;
@@ -319,8 +320,7 @@ class ArrayList
     return growth;
   }
 
-  AL_NODISCARD constexpr inline auto get_allocator() noexcept
-      -> allocator_type& {
+  AL_NODISCARD constexpr auto get_allocator() noexcept -> allocator_type& {
     return static_cast<allocator_type&>(*this);
   }
 
@@ -332,7 +332,10 @@ class ArrayList
     end_ = data_ + capacity;
     current_ = data_;
   }
+
+  // NOLINTBEGIN
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
+  // NOLINTEND
   constexpr ArrayList(Iter first, Iter last,
                       const allocator_type& alloc = allocator_type())
       : allocator_type(alloc) {
@@ -381,11 +384,13 @@ class ArrayList
     deallocate_ptr();
   }
 
-  AL_NODISCARD constexpr inline auto empty() const noexcept -> bool {
+  AL_NODISCARD constexpr auto empty() const noexcept -> bool {
     return data_ == current_;
   }
 
+  // NOLINTBEGIN
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
+  // NOLINTEND
   constexpr auto push_back(Iter first, Iter last) -> void {
     const auto ufirst = detail::get_unwrapped(first);
     const auto ulast = detail::get_unwrapped(last);
@@ -634,13 +639,13 @@ class ArrayList
   }
 
   template <typename... Args>
-  constexpr auto raw_emplace_into(value_type* const my_ptr,
-                                  Args&&... args) -> value_type& {
+  constexpr auto raw_emplace_into(value_type* const my_ptr, Args&&... args)
+      -> value_type& {
     new (my_ptr) value_type(std::forward<Args>(args)...);
     return *my_ptr;
   }
-  constexpr auto raw_push_into(value_type* const my_ptr,
-                               const Type& value) -> void {
+  constexpr auto raw_push_into(value_type* const my_ptr, const Type& value)
+      -> void {
     new (my_ptr) value_type(value);
   }
   constexpr auto raw_push_into(value_type* const my_ptr, Type&& value) -> void {
@@ -658,7 +663,7 @@ class ArrayList
     raw_push_into(current_++, std::move(value));
   }
 
-  constexpr inline auto destruct_all_elements() -> void {
+  constexpr auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
       detail::destroy_range(data_, current_);
     }
