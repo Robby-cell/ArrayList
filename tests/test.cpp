@@ -232,24 +232,26 @@ TEST_CASE("Erase") {
 TEST_CASE("Constant values") {
 #define CALL(TYPE, CTR_ARGS, MEMBER, CALL_ARGS) \
   []() {                                        \
-    TYPE _List{CTR_ARGS};                       \
-    return _List.MEMBER(CALL_ARGS);             \
+    TYPE List{CTR_ARGS};                        \
+    return List.MEMBER(CALL_ARGS);              \
   }()
-#define ARGS(MY_ARGS...) MY_ARGS
+#define ARGS(...) __VA_ARGS__
+#define NO_ARGS() ARGS()
 #define ASSERT_SAME(TYPE1, TYPE2, CTR_ARGS, MEMBER, CALL_ARGS) \
   REQUIRE(CALL(TYPE1, ARGS(CTR_ARGS), MEMBER, CALL_ARGS) ==    \
           CALL(TYPE2, ARGS(CTR_ARGS), MEMBER, CALL_ARGS))
 
-  ASSERT_SAME(al::_ArrayList_impl<int>, std::vector<int>, ARGS(), max_size,
-              ARGS());
-  ASSERT_SAME(al::_ArrayList_impl<int>, std::vector<int>, ARGS(10), max_size,
-              ARGS());
-  ASSERT_SAME(al::_ArrayList_impl<int>, std::vector<int>, ARGS(100), max_size,
-              ARGS());
-  ASSERT_SAME(al::_ArrayList_impl<int>, std::vector<int>, ARGS(1000), capacity,
-              ARGS());
+  // NOLINTBEGIN
+  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, NO_ARGS(), max_size,
+              NO_ARGS());
+  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(100), max_size,
+              NO_ARGS());
+  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(1000), capacity,
+              NO_ARGS());
+  // NOLINTEND
 
 #undef ASSERT_SAME
+#undef NO_ARGS
 #undef ARGS
 #undef CALL
 }
@@ -285,10 +287,6 @@ TEST_CASE("Benchmark simple behavior") {
         }
       };
 
-  BENCHMARK("std::vector") {
-    return WhatToDo.template operator()<std::vector>();
-  };
-  BENCHMARK("al::ArrayList") {
-    return WhatToDo.template operator()<al::ArrayList>();
-  };
+  BENCHMARK("std::vector") { WhatToDo.template operator()<std::vector>(); };
+  BENCHMARK("al::ArrayList") { WhatToDo.template operator()<al::ArrayList>(); };
 }
