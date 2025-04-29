@@ -8,7 +8,7 @@
 #include "al/array_list.hpp"
 
 TEST_CASE("Basic functionality") {
-  al::ArrayList<int> list;
+  al::_ArrayList_impl<int> list;
   REQUIRE(list.empty());
   REQUIRE(list.size() == 0);
   REQUIRE(list.begin() == list.end());
@@ -25,7 +25,7 @@ TEST_CASE("Basic functionality") {
 }
 
 TEST_CASE("Iterators") {
-  al::ArrayList<int> list;
+  al::_ArrayList_impl<int> list;
   REQUIRE(list.begin() == list.end());
   REQUIRE(list.cbegin() == list.cend());
 
@@ -53,42 +53,42 @@ TEST_CASE("Iterators with non-trivial types") {
     bool counts = true;
   };
   {
-    al::ArrayList<Foo> list;
+    al::_ArrayList_impl<Foo> list;
 
     list.emplace_back();
     list.emplace_back();
-    REQUIRE(x == 0);
+    REQUIRE(x == 1);
   }
 
   SECTION(
       "Make sure no items are destroyed that haven't been constructed and "
       "items that are constructed are destroyed") {
-    REQUIRE(x == 2);
+    REQUIRE(x == 3);
   }
 }
 
 TEST_CASE("Copy construction") {
-  al::ArrayList<int> list;
+  al::_ArrayList_impl<int> list;
   list.push_back(42);
 
-  al::ArrayList<int> copy = list;
+  al::_ArrayList_impl<int> copy = list;
   REQUIRE(copy.size() == 1);
   REQUIRE(copy.front() == 42);
 }
 
 TEST_CASE("Copy with non trivial types") {
-  al::ArrayList<std::string> list;
+  al::_ArrayList_impl<std::string> list;
   list.push_back("Hello");
   list.push_back("World");
 
-  al::ArrayList<std::string> copy = list;
+  al::_ArrayList_impl<std::string> copy = list;
   REQUIRE(copy.size() == 2);
   REQUIRE(copy.front() == "Hello");
   REQUIRE(copy.back() == "World");
 }
 
 TEST_CASE("Iterator push_back") {
-  al::ArrayList<int> list;
+  al::_ArrayList_impl<int> list;
   std::array<int, 10> values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   list.push_back(values.begin(), values.end());
 
@@ -105,7 +105,7 @@ TEST_CASE("Reserve") {
   {
     constexpr size_t Capacity = 20U;
 
-    al::ArrayList<Foo> list;
+    al::_ArrayList_impl<Foo> list;
     list.reserve(Capacity);
 
     REQUIRE(list.size() == 0);
@@ -127,16 +127,17 @@ TEST_CASE("Non trivial types in iterator push_back") {
   {
     std::array<Foo, Capacity> values;
 
-    al::ArrayList<Foo> list(Capacity);
+    al::_ArrayList_impl<Foo> list(Capacity);
 
     REQUIRE(list.size() == 0);
     REQUIRE(list.capacity() == Capacity);
 
     list.push_back(values.begin(), values.end());
 
-    REQUIRE(list.size() == Capacity);
+    REQUIRE(list.size() == values.size());
     REQUIRE(list.capacity() == Capacity);
   }
+  REQUIRE(x == Capacity * 2);
 
   SECTION(
       "Make sure items are destroyed, and their copys are destroyed, and no "
@@ -153,10 +154,12 @@ TEST_CASE("Resizing correctly destroys items") {
 
   constexpr size_t Capacity = 20U;
   {
-    al::ArrayList<Foo> list(Capacity);
+    al::_ArrayList_impl<Foo> list(Capacity);
 
     list.push_back(Foo{});
     list.push_back(Foo{});
+
+    // copying temporary, twice, 2 calls to destructor
     REQUIRE(x == 2);
 
     constexpr size_t Size = 0U;
@@ -189,7 +192,11 @@ TEST_CASE("Simple test vs std::vector") {
           list.emplace_back();
         }
 
+#if MSVC
         REQUIRE(list.capacity() == 45);
+#elif CLANG || GCC
+        REQUIRE(list.capacity() == 40);
+#endif
         REQUIRE(list.size() == 40);
       };
 
@@ -198,7 +205,7 @@ TEST_CASE("Simple test vs std::vector") {
 }
 
 TEST_CASE("Erase") {
-  al::ArrayList<int> list;
+  al::_ArrayList_impl<int> list;
   list.push_back(1);
   list.push_back(2);
   list.push_back(3);
@@ -212,7 +219,8 @@ TEST_CASE("Erase") {
   REQUIRE(list[3] == 4);
   REQUIRE(list[4] == 5);
 
-  auto it = list.erase(const_cast<const al::ArrayList<int>&>(list).begin() + 2);
+  auto it =
+      list.erase(const_cast<const al::_ArrayList_impl<int>&>(list).begin() + 2);
 
   REQUIRE(list.size() == 4);
   REQUIRE(list[0] == 1);
@@ -250,7 +258,7 @@ TEST_CASE("Constant values") {
 
 TEST_CASE("Container-like constructors") {
   std::array<int, 10> values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  al::ArrayList<int> list{values};
+  al::_ArrayList_impl<int> list{values};
 
   REQUIRE(list.size() == 10);
   REQUIRE(list.front() == values.front());
@@ -259,7 +267,7 @@ TEST_CASE("Container-like constructors") {
 
 TEST_CASE("Construction from std::vector") {
   std::vector<int> values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  al::ArrayList<int> list(values);
+  al::_ArrayList_impl<int> list(values);
 
   for (auto index = 0; index < list.size(); ++index) {
     REQUIRE(list[index] == values[index]);
