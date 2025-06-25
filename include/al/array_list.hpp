@@ -17,16 +17,16 @@
 #if HAS_CXX17
 #define CONSTEXPR_CXX17 constexpr
 #else
-#define CONSTEXPR_CXX17 inline
+#define CONSTEXPR_CXX17
 #endif
 
 #if HAS_CXX20
 #define CONSTEXPR_CXX20 constexpr
 #else
-#define CONSTCONSTEXPR_CXX20
+#define CONSTEXPR_CXX20
 #endif
 
-#define HAS_CONCEPTS (HAS_CXX20)
+#define HAS_CONCEPTS (__cpp_concepts >= 201907UL)
 
 #include <algorithm>
 #include <cstring>
@@ -43,8 +43,10 @@
 
 #if HAS_CONCEPTS
 #define CONSTRAINT(CONSTRAINT_NAME) CONSTRAINT_NAME
+#define REQUIRES(...) requires(__VA_ARGS__)
 #else
 #define CONSTRAINT(X) typename
+#define REQUIRES(...)
 #endif
 
 #if (defined(__clang__) && !defined(_MSC_VER))
@@ -101,27 +103,37 @@ using IterConcatenateType =
     typename std::iterator_traits<Iter>::iterator_category;
 
 template <class Type, class = void>
-constexpr bool IsIterator = false;
+constexpr inline bool IsIterator = false;
 
 template <class Type>
-constexpr bool IsIterator<Type, std::void_t<IterConcatenateType<Type>>> = true;
+constexpr inline bool IsIterator<Type, std::void_t<IterConcatenateType<Type>>> =
+    true;
+
+template <class Iter, class WantedIter>
+constexpr inline bool IsIteratorCategory =
+    std::is_same_v<typename std::iterator_traits<Iter>::iterator_category,
+                   WantedIter>;
+
+template <class Iter>
+constexpr inline bool IsRandomAccessIterator =
+    IsIteratorCategory<Iter, std::random_access_iterator_tag>;
 
 template <class Iter, class = void>
-constexpr bool AllowInheritingUnwrap = true;
+constexpr inline bool AllowInheritingUnwrap = true;
 // ^^^ MSVC iterators can be weird, might need something with this in future
 
 template <class Iter, class = void>
-constexpr bool IsUnwrappable = false;
+constexpr inline bool IsUnwrappable = false;
 
 template <class Iter>
-constexpr bool IsUnwrappable<
+constexpr inline bool IsUnwrappable<
     Iter, std::void_t<decltype(std::declval<al::remove_cvref_t<Iter>&>())>> =
     AllowInheritingUnwrap<al::remove_cvref_t<Iter>>;
 
 template <class Iter, class = void>
-constexpr bool HasNothrowUnwrapped = false;
+constexpr inline bool HasNothrowUnwrapped = false;
 template <class Iter>
-constexpr bool
+constexpr inline bool
     HasNothrowUnwrapped<Iter, std::void_t<decltype(std::declval<Iter>())>> =
         noexcept(std::declval<Iter>());
 
@@ -369,16 +381,22 @@ class ArrayListImpl {  // NOLINT
   CONSTEXPR_CXX20 ArrayListImpl(Iter first, Iter last,
                                 const allocator_type& alloc = allocator_type())
       : compressed_(alloc) {
-    const auto ufirst = detail::get_unwrapped(first);
-    const auto ulast = detail::get_unwrapped(last);
+    if constexpr (detail::IsRandomAccessIterator<Iter>) {
+      const auto ufirst = detail::get_unwrapped(first);
+      const auto ulast = detail::get_unwrapped(last);
 
-    const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
+      const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
 
-    compressed_.data = AltyTraits::allocate(get_allocator(), length);
-    compressed_.end = compressed_.data + length;
-    compressed_.current = compressed_.data + length;
+      compressed_.data = AltyTraits::allocate(get_allocator(), length);
+      compressed_.end = compressed_.data + length;
+      compressed_.current = compressed_.data + length;
 
-    std::uninitialized_copy(ufirst, ulast, compressed_.data);
+      std::uninitialized_copy(ufirst, ulast, compressed_.data);
+    } else {
+      for (; first != last; ++first) {
+        push_back(*first);
+      }
+    }
   }
 
   CONSTEXPR_CXX20 ArrayListImpl(std::initializer_list<Type> list,
