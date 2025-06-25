@@ -344,7 +344,6 @@ class ArrayListImpl {
     ensure_not_empty();
     // destroy it!
     destroy_in_place(compressed_.current);
-    compressed_.current->~value_type();
     --compressed_.current;
   }
 
