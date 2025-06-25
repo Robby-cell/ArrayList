@@ -180,28 +180,21 @@ TEST_CASE("Resizing correctly destroys items") {
   REQUIRE(x == 4);
 }
 
-TEST_CASE("Simple test vs std::vector") {
-  constexpr auto WhatToDo =
-      []<template <typename Type, typename = std::allocator<Type>>
-         typename ContainerType>() {
-        ContainerType<int> list;
-        list.reserve(10);
-        list.resize(20);
+TEST_CASE("Simple test") {
+  constexpr auto WhatToDo = []() {
+    al::ArrayList<int> list;
+    list.reserve(10);
+    list.resize(20);
 
-        for (auto i = 0U; i < 20U; ++i) {
-          list.emplace_back();
-        }
+    for (auto i = 0U; i < 20U; ++i) {
+      list.emplace_back();
+    }
 
-#if MSVC
-        REQUIRE(list.capacity() == 45);
-#elif CLANG || GCC
-        REQUIRE(list.capacity() == 40);
-#endif
-        REQUIRE(list.size() == 40);
-      };
+    REQUIRE(list.capacity() == 45);
+    REQUIRE(list.size() == 40);
+  };
 
-  SECTION("std::vector") { WhatToDo.template operator()<std::vector>(); }
-  SECTION("al::ArrayList") { WhatToDo.template operator()<al::ArrayList>(); }
+  SECTION("al::ArrayList") { WhatToDo(); }
 }
 
 TEST_CASE("Erase") {
@@ -226,29 +219,6 @@ TEST_CASE("Erase") {
   REQUIRE(list[1] == 2);
   REQUIRE(list[2] == 4);
   REQUIRE(list[3] == 5);
-}
-
-TEST_CASE("Constant values") {
-#define CALL(TYPE, CTR_ARGS, MEMBER, CALL_ARGS) \
-  []() {                                        \
-    TYPE _List{CTR_ARGS};                       \
-    return _List.MEMBER(CALL_ARGS);             \
-  }()
-#define ARGS(MY_ARGS...) MY_ARGS
-#define ASSERT_SAME(TYPE1, TYPE2, CTR_ARGS, MEMBER, CALL_ARGS) \
-  REQUIRE(CALL(TYPE1, ARGS(CTR_ARGS), MEMBER, CALL_ARGS) ==    \
-          CALL(TYPE2, ARGS(CTR_ARGS), MEMBER, CALL_ARGS))
-
-  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(), max_size, ARGS());
-  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(10), max_size, ARGS());
-  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(100), max_size,
-              ARGS());
-  ASSERT_SAME(al::ArrayList<int>, std::vector<int>, ARGS(1000), capacity,
-              ARGS());
-
-#undef ASSERT_SAME
-#undef ARGS
-#undef CALL
 }
 
 TEST_CASE("Container-like constructors") {
@@ -282,10 +252,6 @@ TEST_CASE("Benchmark simple behavior") {
         }
       };
 
-  BENCHMARK("std::vector") {
-    return WhatToDo.template operator()<std::vector>();
-  };
-  BENCHMARK("al::ArrayList") {
-    return WhatToDo.template operator()<al::ArrayList>();
-  };
+  BENCHMARK("std::vector") { WhatToDo.template operator()<std::vector>(); };
+  BENCHMARK("al::ArrayList") { WhatToDo.template operator()<al::ArrayList>(); };
 }

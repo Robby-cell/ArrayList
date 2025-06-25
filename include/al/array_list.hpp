@@ -48,7 +48,7 @@
 #endif
 
 #if defined(__GNUC__)
-#define GCC
+#define GCC 1
 #else
 #define GCC 0
 #endif
@@ -120,8 +120,9 @@ constexpr bool
         noexcept(std::declval<Iter>());
 
 template <class Iter>
-constexpr auto get_unwrapped(Iter&& it) noexcept(
-    not IsUnwrappable<Iter> or HasNothrowUnwrapped<Iter>) -> decltype(auto) {
+constexpr auto get_unwrapped(Iter&& it) noexcept(not IsUnwrappable<Iter> or
+                                                 HasNothrowUnwrapped<Iter>)
+    -> decltype(auto) {
   if constexpr (std::is_pointer_v<std::decay_t<Iter>>) {
     return it + 0;
   } else if constexpr (IsUnwrappable<Iter>) {
@@ -148,6 +149,33 @@ struct IterType<Iter[]> {
   using value_type = Iter;  // NOLINT
 };
 
+<<<<<<< HEAD
+=======
+template <typename Iter, typename Sentinel>
+constexpr auto destroy_range(Iter first, Sentinel last) noexcept;
+
+template <typename Type>
+constexpr auto destroy_in_place(Type* value) noexcept {
+  if constexpr (std::is_array_v<Type>) {
+    for (auto& element : *value) {
+      (destroy_in_place)(std::addressof(element));
+    }
+  } else {
+    value->~Type();
+  }
+}
+
+template <typename Iter, typename Sentinel>
+constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
+  if constexpr (not std::is_trivially_destructible_v<
+                    typename IterType<Iter>::value_type>) {
+    for (; first != last; ++first) {
+      destroy_in_place(std::addressof(*first));
+    }
+  }
+}
+
+>>>>>>> 671d0a717e46069a5bbf520cc3cc9267bb90938c
 }  // namespace detail
 
 template <typename ArrayList>
@@ -282,9 +310,11 @@ struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
 struct ArrayListDefaultGrowthDifference {
   constexpr auto operator()(const size_t old_capacity) -> size_t {
 #if CLANG || GCC
-    return old_capacity;
-    // return old_capacity / 2;
+    // return old_capacity;
+    return old_capacity / 2;
 #elif MSVC
+    return old_capacity / 2;
+#else
     return old_capacity / 2;
 #endif
   }
@@ -333,8 +363,12 @@ class ArrayListImpl {  // NOLINT
     if (new_size > max_size() - old_capacity / 2) {
       return max_size();
     }
+<<<<<<< HEAD
 
     const auto growth = old_capacity + old_capacity / 2;
+=======
+    const auto growth = old_capacity + (old_capacity / 2);
+>>>>>>> 671d0a717e46069a5bbf520cc3cc9267bb90938c
 
     if (growth < new_size) {
       return new_size;
@@ -342,9 +376,14 @@ class ArrayListImpl {  // NOLINT
     return growth;
   }
 
+<<<<<<< HEAD
   AL_NODISCARD constexpr inline auto get_allocator() noexcept
       -> allocator_type& {
     return compressed_.get_allocator();
+=======
+  AL_NODISCARD constexpr auto get_allocator() noexcept -> allocator_type& {
+    return compressed_;
+>>>>>>> 671d0a717e46069a5bbf520cc3cc9267bb90938c
   }
 
  public:
@@ -356,12 +395,20 @@ class ArrayListImpl {  // NOLINT
     compressed_.end = compressed_.data + capacity;
     compressed_.current = compressed_.data;
   }
+
+  // NOLINTBEGIN
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
+<<<<<<< HEAD
   CONSTEXPR_CXX20 ArrayListImpl(Iter first, Iter last,
                                 const allocator_type& alloc = allocator_type())
+=======
+  // NOLINTEND
+  constexpr _ArrayList_impl(Iter first, Iter last,
+                            const allocator_type& alloc = allocator_type())
+>>>>>>> 671d0a717e46069a5bbf520cc3cc9267bb90938c
       : compressed_(alloc) {
-    const auto ufirst = detail::get_unwrapped(first);  // NOLINT
-    const auto ulast = detail::get_unwrapped(last);    // NOLINT
+    const auto ufirst = detail::get_unwrapped(first);
+    const auto ulast = detail::get_unwrapped(last);
 
     const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
 
@@ -408,12 +455,14 @@ class ArrayListImpl {  // NOLINT
     deallocate_ptr();
   }
 
-  AL_NODISCARD constexpr inline auto empty() const noexcept -> bool {
+  AL_NODISCARD constexpr auto empty() const noexcept -> bool {
     return compressed_.data == compressed_.current;
   }
 
+  // NOLINTBEGIN
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  CONSTEXPR_CXX20 auto push_back(Iter first, Iter last) -> void {
+  // NOLINTEND
+  constexpr auto push_back(Iter first, Iter last) -> void {
     const auto ufirst = detail::get_unwrapped(first);
     const auto ulast = detail::get_unwrapped(last);
 
@@ -482,7 +531,11 @@ class ArrayListImpl {  // NOLINT
         if (len > 0) {
           std::uninitialized_move_n(old_ptr, len, compressed_.data);
         }
+<<<<<<< HEAD
         destroy_range(get_allocator(), old_ptr, old_ptr + len);
+=======
+        ::al::detail::destroy_range(old_ptr, old_ptr + len);
+>>>>>>> 671d0a717e46069a5bbf520cc3cc9267bb90938c
         deallocate_target_ptr(old_ptr, cap);
       }
     }
@@ -650,17 +703,17 @@ class ArrayListImpl {  // NOLINT
   }
 
   template <typename... Args>
-  CONSTEXPR_CXX20 auto raw_emplace_into(value_type* const my_ptr,
-                                        Args&&... args) -> value_type& {
-    AltyTraits::construct(get_allocator(), my_ptr, std::forward<Args>(args)...);
+  constexpr auto raw_emplace_into(value_type* const my_ptr, Args&&... args)
+      -> value_type& {
+    new (my_ptr) value_type(std::forward<Args>(args)...);
     return *my_ptr;
   }
-  CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr,
-                                     const Type& value) -> void {
-    AltyTraits::construct(get_allocator(), my_ptr, value);
+  constexpr auto raw_push_into(value_type* const my_ptr, const Type& value)
+      -> void {
+    new (my_ptr) value_type(value);
   }
-  CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr,
-                                     Type&& value) -> void {
+  CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr, Type&& value)
+      -> void {
     AltyTraits::construct(get_allocator(), my_ptr, std::move(value));
   }
 
@@ -686,6 +739,7 @@ class ArrayListImpl {  // NOLINT
     }
   }
 
+<<<<<<< HEAD
   template <typename It, typename Sentinel>
   CONSTEXPR_CXX20 auto destroy_range(allocator_type& alloc, It first,
                                      Sentinel last) {
@@ -699,6 +753,11 @@ class ArrayListImpl {  // NOLINT
   CONSTEXPR_CXX20 auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
       destroy_range(get_allocator(), compressed_.data, compressed_.current);
+=======
+  CONSTEXPR_CXX20 auto destruct_all_elements() -> void {
+    if constexpr (not std::is_trivially_destructible_v<Type>) {
+      ::al::detail::destroy_range(compressed_.data, compressed_.current);
+>>>>>>> 671d0a717e46069a5bbf520cc3cc9267bb90938c
     }
   }
   CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
