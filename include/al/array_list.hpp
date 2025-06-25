@@ -168,132 +168,6 @@ struct IterType<Iter[]> {
 
 }  // namespace detail
 
-template <typename ArrayList>
-struct ArrayListConstIterator {
- private:
-  using Self = ArrayListConstIterator;
-
- public:
-  // NOLINTBEGIN
-  using iterator_category = std::random_access_iterator_tag;
-  using value_type = typename ArrayList::value_type;
-  using difference_type = ptrdiff_t;
-  using pointer = const value_type*;
-  using reference = const value_type&;
-
-  constexpr ArrayListConstIterator(value_type* const current) : ptr_(current) {}
-  constexpr ArrayListConstIterator(std::nullptr_t) : ptr_(nullptr) {}
-  // NOLINTEND
-
-  AL_NODISCARD constexpr auto operator*() const noexcept -> reference {
-    return *ptr_;
-  }
-  constexpr auto operator->() const noexcept -> pointer { return ptr_; }
-
-  constexpr auto operator++() noexcept -> ArrayListConstIterator& {
-    ++ptr_;
-    return *this;
-  }
-  constexpr auto operator++(int) noexcept -> ArrayListConstIterator {
-    auto tmp = *this;
-    Self::operator++();
-    return tmp;
-  }
-  constexpr auto operator--() noexcept -> ArrayListConstIterator& {
-    --ptr_;
-    return *this;
-  }
-  constexpr auto operator--(int) noexcept -> ArrayListConstIterator {
-    auto tmp = *this;
-    Self::operator--();
-    return tmp;
-  }
-
-  AL_NODISCARD constexpr auto operator!=(
-      const ArrayListConstIterator& other) const& noexcept {
-    return ptr_ != other.ptr_;
-  }
-  AL_NODISCARD constexpr auto operator==(
-      const ArrayListConstIterator& other) const& noexcept {
-    return !Self::operator!=(other);
-  }
-
-  AL_NODISCARD constexpr auto operator-(
-      const ArrayListConstIterator& other) const& noexcept -> difference_type {
-    return static_cast<difference_type>(ptr_ - other.ptr_);
-  }
-
-  template <CONSTRAINT(std::integral) Integer>
-  constexpr auto operator+(Integer n) const& noexcept
-      -> ArrayListConstIterator {
-    return ArrayListConstIterator(ptr_ + n);
-  }
-
- protected:
-  value_type* ptr_;
-};
-
-template <typename ArrayList>
-struct ArrayListIterator : public ArrayListConstIterator<ArrayList> {
- private:
-  using Self = ArrayListIterator;
-  using Base = ArrayListConstIterator<ArrayList>;
-
- public:
-  // NOLINTBEGIN
-  using iterator_category = std::random_access_iterator_tag;
-  using value_type = typename Base::value_type;
-  using difference_type = typename Base::difference_type;
-  using pointer = value_type*;
-  using reference = value_type&;
-
-  constexpr ArrayListIterator(pointer current)
-      : ArrayListConstIterator<ArrayList>(current) {}
-  constexpr ArrayListIterator(std::nullptr_t)
-      : ArrayListConstIterator<ArrayList>(nullptr) {}
-  // NOLINTEND
-
-  AL_NODISCARD constexpr auto operator*() const noexcept -> reference {
-    return const_cast<reference>(Base::operator*());
-  }
-  constexpr auto operator->() const noexcept -> pointer {
-    return const_cast<pointer>(Base::operator->());
-  }
-
-  constexpr auto operator++() noexcept -> ArrayListIterator& {
-    Base::operator++();
-    return *this;
-  }
-  constexpr auto operator++(int) noexcept -> ArrayListIterator {
-    auto tmp = *this;
-    Self::operator++();
-    return tmp;
-  }
-  constexpr auto operator--() noexcept -> ArrayListIterator& {
-    Base::operator--();
-    return *this;
-  }
-  constexpr auto operator--(int) noexcept -> ArrayListIterator {
-    auto tmp = *this;
-    Self::operator--();
-    return *this;
-  }
-
-  template <CONSTRAINT(std::integral) Integer>
-  constexpr auto operator+(Integer n) noexcept -> ArrayListIterator {
-    return ArrayListIterator(Base::ptr_ + n);
-  }
-
-  AL_NODISCARD constexpr auto operator!=(
-      const ArrayListIterator& other) const& noexcept {
-    return Base::operator!=(other);
-  }
-  AL_NODISCARD constexpr auto operator==(
-      const ArrayListIterator& other) const& noexcept {
-    return !Self::operator!=(other);
-  }
-};
-
 /// \deprecated
 /// This is the difference in size. old capacity + this value is the new
 /// prefered size
@@ -314,7 +188,7 @@ template <typename Type, typename Allocator = std::allocator<Type>>
 #if HAS_CONCEPTS
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
 #endif
-class ArrayListImpl {  // NOLINT
+class ArrayListImpl {
   static_assert(
       std::is_same_v<Type, typename Allocator::value_type>,
       "Requires allocator's type to match the type held by the ArrayList");
@@ -335,13 +209,13 @@ class ArrayListImpl {  // NOLINT
   using const_reference = const Type&;
   using size_type = typename AltyTraits::size_type;
   using difference_type = typename AltyTraits::difference_type;
-  using iterator = ArrayListIterator<ArrayListImpl>;
-  using const_iterator = ArrayListConstIterator<ArrayListImpl>;
+  using iterator = pointer;
+  using const_iterator = const_pointer;
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
   // NOLINTEND
 
-  constexpr auto max_size() const noexcept -> size_type {
+  static constexpr auto max_size() noexcept -> size_type {
     return static_cast<size_type>(-1) / sizeof(value_type);
   }
 
@@ -361,8 +235,7 @@ class ArrayListImpl {  // NOLINT
     return growth;
   }
 
-  AL_NODISCARD constexpr inline auto get_allocator() noexcept
-      -> allocator_type& {
+  AL_NODISCARD constexpr auto get_allocator() noexcept -> allocator_type& {
     return compressed_.get_allocator();
   }
 
@@ -416,7 +289,7 @@ class ArrayListImpl {  // NOLINT
       : compressed_(std::exchange(other.compressed_, Compressed())) {}
 
   CONSTEXPR_CXX20 auto operator=(const ArrayListImpl& other) -> ArrayListImpl& {
-    if (this not_eq std::addressof(other)) {
+    if (this != std::addressof(other)) {
       copy_safe(other);
     }
     return *this;
@@ -470,6 +343,7 @@ class ArrayListImpl {  // NOLINT
   CONSTEXPR_CXX20 void pop_back() {
     ensure_not_empty();
     // destroy it!
+    destroy_in_place(compressed_.current);
     compressed_.current->~value_type();
     --compressed_.current;
   }
@@ -511,7 +385,7 @@ class ArrayListImpl {  // NOLINT
         if (len > 0) {
           std::uninitialized_move_n(old_ptr, len, compressed_.data);
         }
-        destroy_range(get_allocator(), old_ptr, old_ptr + len);
+        destroy_range(old_ptr, old_ptr + len);
         deallocate_target_ptr(old_ptr, cap);
       }
     }
@@ -704,30 +578,28 @@ class ArrayListImpl {  // NOLINT
     raw_push_into(compressed_.current++, std::move(value));
   }
 
-  CONSTEXPR_CXX20 auto destroy_in_place(allocator_type& alloc,
-                                        Type* value) noexcept {
+  CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept {
     if constexpr (std::is_array_v<Type>) {
       for (auto& element : *value) {
-        (destroy_in_place)(alloc, std::addressof(element));
+        (destroy_in_place)(get_allocator(), std::addressof(element));
       }
     } else {
-      AltyTraits::destroy(alloc, value);
+      AltyTraits::destroy(get_allocator(), value);
     }
   }
 
   template <typename It, typename Sentinel>
-  CONSTEXPR_CXX20 auto destroy_range(allocator_type& alloc, It first,
-                                     Sentinel last) {
+  CONSTEXPR_CXX20 auto destroy_range(It first, Sentinel last) {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
       for (; first != last; ++first) {
-        destroy_in_place(alloc, std::addressof(*first));
+        destroy_in_place(std::addressof(*first));
       }
     }
   }
 
   CONSTEXPR_CXX20 auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
-      destroy_range(get_allocator(), compressed_.data, compressed_.current);
+      destroy_range(compressed_.data, compressed_.current);
     }
   }
   CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,

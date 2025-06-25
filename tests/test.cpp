@@ -5,6 +5,7 @@
 // StdLib
 #include <array>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -216,7 +217,8 @@ TEST_CASE("Erase") {
   REQUIRE(list[3] == 4);
   REQUIRE(list[4] == 5);
 
-  auto it = list.erase(const_cast<const al::ArrayList<int>&>(list).begin() + 2);
+  auto* it =
+      list.erase(const_cast<const al::ArrayList<int>&>(list).begin() + 2);
 
   REQUIRE(list.size() == 4);
   REQUIRE(list[0] == 1);
@@ -258,4 +260,25 @@ TEST_CASE("Benchmark simple behavior") {
 
   BENCHMARK("std::vector") { WhatToDo.template operator()<std::vector>(); };
   BENCHMARK("al::ArrayList") { WhatToDo.template operator()<al::ArrayList>(); };
+}
+
+TEST_CASE("Benchmark on a larger sample") {
+  static constexpr auto IterationSize = 100UL;
+
+  constexpr auto WhatToDo = []<class Container> {
+    for (const auto _ : std::ranges::iota_view(0ULL, 100ULL)) {
+      Container container;
+      for (const auto i : std::ranges::iota_view(0ULL, IterationSize)) {
+        container.emplace_back(std::to_string(i));
+      }
+      REQUIRE(container.size() == IterationSize);
+    }
+  };
+
+  BENCHMARK("std::vector") {
+    WhatToDo.template operator()<std::vector<std::string>>();
+  };
+  BENCHMARK("al::ArrayList") {
+    WhatToDo.template operator()<al::ArrayList<std::string>>();
+  };
 }

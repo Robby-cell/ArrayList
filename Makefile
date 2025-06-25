@@ -1,7 +1,7 @@
 BUILD_DIR = build
 BIN = ${BUILD_DIR}/Debug/array_list
 
-TEST = ${BUILD_DIR}/Debug/tests/test
+TEST = ${BUILD_DIR}/Debug/tests/run-tests
 
 run: debug
 	./${BIN}

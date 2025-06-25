@@ -1,0 +1,10 @@
+# This file is configured by CMake and installed into
+# ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/cmake/array_list
+
+@PACKAGE_INIT@
+
+# This line is critical. It includes the auto-generated file
+# that defines the actual imported target: `array_list::array_list`.
+include("${CMAKE_CURRENT_LIST_DIR}/array_list-targets.cmake")
+
+check_required_components(array_list)

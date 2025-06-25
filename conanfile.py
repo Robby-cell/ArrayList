@@ -18,9 +18,10 @@ class ArrayListRecipe(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
 
     # Sources are located in the same place as this recipe, copy them to the recipe
-    exports_sources = "CMakeLists.txt", "src/*", "tests/*"
+    exports_sources = "CMakeLists.txt", "include/*"
 
-    requires = ["catch2/3.8.0"]
+    def requirements(self):
+        self.test_requires("catch2/3.8.0")
 
     def layout(self):
         cmake_layout(self)
