@@ -102,28 +102,22 @@ constexpr bool IsIterator<Type, std::void_t<IterConcatenateType<Type>>> = true;
 
 template <class Iter, class = void>
 constexpr bool AllowInheritingUnwrap = true;
-
-template <class Iter>
-constexpr bool AllowInheritingUnwrap<
-    Iter, std::void_t<typename Iter::_Prevent_inheriting_unwrap>> =
-    std::is_same_v<Iter, typename Iter::_Prevent_inheriting_unwrap>;
+// ^^^ MSVC iterators can be weird, might need something with this in future
 
 template <class Iter, class = void>
 constexpr bool IsUnwrappable = false;
 
 template <class Iter>
 constexpr bool IsUnwrappable<
-    Iter,
-    std::void_t<decltype(std::declval<al::remove_cvref_t<Iter>&>()._Seek_to(
-        std::declval<Iter>()._Unwrapped()))>> =
+    Iter, std::void_t<decltype(std::declval<al::remove_cvref_t<Iter>&>())>> =
     AllowInheritingUnwrap<al::remove_cvref_t<Iter>>;
 
 template <class Iter, class = void>
 constexpr bool HasNothrowUnwrapped = false;
 template <class Iter>
-constexpr bool HasNothrowUnwrapped<
-    Iter, std::void_t<decltype(std::declval<Iter>()._Unwrapped())>> =
-    noexcept(std::declval<Iter>()._Unwrapped());
+constexpr bool
+    HasNothrowUnwrapped<Iter, std::void_t<decltype(std::declval<Iter>())>> =
+        noexcept(std::declval<Iter>());
 
 template <class Iter>
 constexpr auto get_unwrapped(Iter&& it) noexcept(
@@ -131,7 +125,7 @@ constexpr auto get_unwrapped(Iter&& it) noexcept(
   if constexpr (std::is_pointer_v<std::decay_t<Iter>>) {
     return it + 0;
   } else if constexpr (IsUnwrappable<Iter>) {
-    return static_cast<Iter&&>(it)._Unwrapped();
+    return static_cast<Iter&&>(it);
   } else {
     return static_cast<Iter&&>(it);
   }
@@ -153,30 +147,6 @@ template <typename Iter>
 struct IterType<Iter[]> {
   using value_type = Iter;  // NOLINT
 };
-
-// template <typename Iter, typename Sentinel>
-// constexpr auto destroy_range(Iter first, Sentinel last) noexcept;
-
-// template <typename Type>
-// constexpr auto destroy_in_place(Type* value) noexcept {
-//   if constexpr (std::is_array_v<Type>) {
-//     for (auto& element : *value) {
-//       (destroy_in_place)(std::addressof(element));
-//     }
-//   } else {
-//     value->~Type();
-//   }
-// }
-
-// template <typename Iter, typename Sentinel>
-// constexpr auto destroy_range(Iter first, Sentinel last) noexcept {
-//   if constexpr (not std::is_trivially_destructible_v<
-//                     typename IterType<Iter>::value_type>) {
-//     for (; first != last; ++first) {
-//       destroy_in_place(std::addressof(*first));
-//     }
-//   }
-// }
 
 }  // namespace detail
 
@@ -324,7 +294,7 @@ template <typename Type, typename Allocator = std::allocator<Type>>
 #if HAS_CONCEPTS
   requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
 #endif
-class _ArrayList_impl {  // NOLINT
+class ArrayListImpl {  // NOLINT
   static_assert(
       std::is_same_v<Type, typename Allocator::value_type>,
       "Requires allocator's type to match the type held by the ArrayList");
@@ -345,8 +315,8 @@ class _ArrayList_impl {  // NOLINT
   using const_reference = const Type&;
   using size_type = typename AltyTraits::size_type;
   using difference_type = typename AltyTraits::difference_type;
-  using iterator = ArrayListIterator<_ArrayList_impl>;
-  using const_iterator = ArrayListConstIterator<_ArrayList_impl>;
+  using iterator = ArrayListIterator<ArrayListImpl>;
+  using const_iterator = ArrayListConstIterator<ArrayListImpl>;
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
   // NOLINTEND
@@ -360,24 +330,10 @@ class _ArrayList_impl {  // NOLINT
       -> size_type {
     const auto old_capacity = capacity();
 
-    // #if CLANG || GCC
-    //     if (new_size > max_size() - old_capacity) {
-    //       return max_size();
-    //     }
-    // #elif MSVC
-    //     if (new_size > max_size() - old_capacity / 2) {
-    //       return max_size();
-    //     }
-    // #endif
     if (new_size > max_size() - old_capacity / 2) {
       return max_size();
     }
 
-    // #if CLANG || GCC
-    //     const auto growth = old_capacity * 2;
-    // #elif MSVC
-    //     const auto growth = old_capacity + old_capacity / 2;
-    // #endif
     const auto growth = old_capacity + old_capacity / 2;
 
     if (growth < new_size) {
@@ -388,21 +344,21 @@ class _ArrayList_impl {  // NOLINT
 
   AL_NODISCARD constexpr inline auto get_allocator() noexcept
       -> allocator_type& {
-    return compressed_;
+    return compressed_.get_allocator();
   }
 
  public:
-  constexpr _ArrayList_impl() noexcept : compressed_() {}
+  constexpr ArrayListImpl() noexcept : compressed_() {}
 
-  CONSTEXPR_CXX20 explicit _ArrayList_impl(
+  CONSTEXPR_CXX20 explicit ArrayListImpl(
       const size_type capacity, const allocator_type& alloc = allocator_type())
       : compressed_(AltyTraits::allocate(get_allocator(), capacity), alloc) {
     compressed_.end = compressed_.data + capacity;
     compressed_.current = compressed_.data;
   }
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-  CONSTEXPR_CXX20 _ArrayList_impl(
-      Iter first, Iter last, const allocator_type& alloc = allocator_type())
+  CONSTEXPR_CXX20 ArrayListImpl(Iter first, Iter last,
+                                const allocator_type& alloc = allocator_type())
       : compressed_(alloc) {
     const auto ufirst = detail::get_unwrapped(first);  // NOLINT
     const auto ulast = detail::get_unwrapped(last);    // NOLINT
@@ -416,33 +372,29 @@ class _ArrayList_impl {  // NOLINT
     std::uninitialized_copy(ufirst, ulast, compressed_.data);
   }
 
-  CONSTEXPR_CXX20 _ArrayList_impl(
-      std::initializer_list<Type> list,
-      const allocator_type& alloc = allocator_type())
-      : _ArrayList_impl(list.begin(), list.end(), alloc) {}
+  CONSTEXPR_CXX20 ArrayListImpl(std::initializer_list<Type> list,
+                                const allocator_type& alloc = allocator_type())
+      : ArrayListImpl(list.begin(), list.end(), alloc) {}
 
   template <CONSTRAINT(IterableContainer) Container>
-  CONSTEXPR_CXX20 explicit _ArrayList_impl(
+  CONSTEXPR_CXX20 explicit ArrayListImpl(
       const Container& container,
       const allocator_type& alloc = allocator_type())
-      : _ArrayList_impl(container.begin(), container.end(), alloc) {}
+      : ArrayListImpl(container.begin(), container.end(), alloc) {}
 
-  CONSTEXPR_CXX20 _ArrayList_impl(
-      const _ArrayList_impl& other,
-      const allocator_type& alloc = allocator_type())
-      : _ArrayList_impl(other.begin(), other.end(), alloc) {}
-  constexpr _ArrayList_impl(_ArrayList_impl&& other) noexcept
+  CONSTEXPR_CXX20 ArrayListImpl(const ArrayListImpl& other,
+                                const allocator_type& alloc = allocator_type())
+      : ArrayListImpl(other.begin(), other.end(), alloc) {}
+  constexpr ArrayListImpl(ArrayListImpl&& other) noexcept
       : compressed_(std::exchange(other.compressed_, Compressed())) {}
 
-  CONSTEXPR_CXX20 auto operator=(const _ArrayList_impl& other)
-      -> _ArrayList_impl& {
+  CONSTEXPR_CXX20 auto operator=(const ArrayListImpl& other) -> ArrayListImpl& {
     if (this not_eq std::addressof(other)) {
       copy_safe(other);
     }
     return *this;
   }
-  constexpr auto operator=(_ArrayList_impl&& other) noexcept
-      -> _ArrayList_impl& {
+  constexpr auto operator=(ArrayListImpl&& other) noexcept -> ArrayListImpl& {
     destruct_all_elements();
     deallocate_ptr();
 
@@ -451,7 +403,7 @@ class _ArrayList_impl {  // NOLINT
     return *this;
   }
 
-  CONSTEXPR_CXX20 ~_ArrayList_impl() {
+  CONSTEXPR_CXX20 ~ArrayListImpl() {
     destruct_all_elements();
     deallocate_ptr();
   }
@@ -530,7 +482,7 @@ class _ArrayList_impl {  // NOLINT
         if (len > 0) {
           std::uninitialized_move_n(old_ptr, len, compressed_.data);
         }
-        destroy_range(old_ptr, old_ptr + len);
+        destroy_range(get_allocator(), old_ptr, old_ptr + len);
         deallocate_target_ptr(old_ptr, cap);
       }
     }
@@ -652,7 +604,7 @@ class _ArrayList_impl {  // NOLINT
     compressed_.end = compressed_.data + capacity;
   }
 
-  CONSTEXPR_CXX20 void copy_safe(const _ArrayList_impl& other) {
+  CONSTEXPR_CXX20 void copy_safe(const ArrayListImpl& other) {
     destruct_all_elements();
     deallocate_ptr();
 
@@ -660,7 +612,7 @@ class _ArrayList_impl {  // NOLINT
     copy_unsafe(other);
   }
 
-  CONSTEXPR_CXX20 void copy_unsafe(const _ArrayList_impl& other) {
+  CONSTEXPR_CXX20 void copy_unsafe(const ArrayListImpl& other) {
     const auto length{other.size()};
     compressed_.current = compressed_.data + length;
     std::uninitialized_copy_n(other.compressed_.data, length, compressed_.data);
@@ -679,20 +631,12 @@ class _ArrayList_impl {  // NOLINT
   }
 
   CONSTEXPR_CXX20 void ensure_size_for_elements(const size_type elements) {
-    // while ((compressed_.current + elements) > compressed_.end) {
-    //   grow_capacity();
-    // }
     if (!(size() + elements <= capacity())) {
       auto new_capacity = calculate_growth(capacity() + elements);
       reserve(new_capacity);
     }
   }
-  CONSTEXPR_CXX20 void grow_capacity() {
-    // const auto new_capacity = capacity() + 1;
-    // const auto growth = calculate_growth(new_capacity);
-    // reserve(growth);
-    return ensure_size_for_elements(1);
-  }
+  CONSTEXPR_CXX20 void grow_capacity() { return ensure_size_for_elements(1); }
 
   template <typename... Args>
   CONSTEXPR_CXX20 auto raw_emplace_back(Args&&... args) -> value_type& {
@@ -731,31 +675,30 @@ class _ArrayList_impl {  // NOLINT
     raw_push_into(compressed_.current++, std::move(value));
   }
 
-  //
-  CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept {
+  CONSTEXPR_CXX20 auto destroy_in_place(allocator_type& alloc,
+                                        Type* value) noexcept {
     if constexpr (std::is_array_v<Type>) {
       for (auto& element : *value) {
-        (destroy_in_place)(std::addressof(element));
+        (destroy_in_place)(alloc, std::addressof(element));
       }
     } else {
-      AltyTraits::destroy(get_allocator(), value);
-      // value->~Type();
+      AltyTraits::destroy(alloc, value);
     }
   }
 
   template <typename It, typename Sentinel>
-  CONSTEXPR_CXX20 auto destroy_range(It first, Sentinel last) {
-    // return detail::destroy_range(begin, end);
+  CONSTEXPR_CXX20 auto destroy_range(allocator_type& alloc, It first,
+                                     Sentinel last) {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
       for (; first != last; ++first) {
-        destroy_in_place(std::addressof(*first));
+        destroy_in_place(alloc, std::addressof(*first));
       }
     }
   }
 
   CONSTEXPR_CXX20 auto destruct_all_elements() -> void {
     if constexpr (not std::is_trivially_destructible_v<Type>) {
-      destroy_range(compressed_.data, compressed_.current);
+      destroy_range(get_allocator(), compressed_.data, compressed_.current);
     }
   }
   CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
@@ -768,17 +711,23 @@ class _ArrayList_impl {  // NOLINT
     deallocate_target_ptr(data(), capacity());
   }
 
-  constexpr auto swap_with_other(_ArrayList_impl& other) -> void {
+  constexpr auto swap_with_other(ArrayListImpl& other) -> void {
     std::swap(compressed_, other.compressed_);
   }
 
-  struct Compressed : public Alty {
+  struct Compressed : public allocator_type {
     constexpr Compressed(pointer data, pointer end, pointer current)
         : data(data), end(end), current(current) {}
-    constexpr explicit Compressed(pointer data, const Alty& ally = Alty())
-        : Alty(ally), data(data), end(data), current(data) {}
+    constexpr explicit Compressed(pointer data,
+                                  const allocator_type& ally = allocator_type())
+        : allocator_type(ally), data(data), end(data), current(data) {}
     constexpr Compressed() = default;
-    constexpr explicit Compressed(const Alty& ally) : Alty(ally) {}
+    constexpr explicit Compressed(const allocator_type& ally)
+        : allocator_type(ally) {}
+
+    constexpr auto get_allocator() noexcept -> allocator_type& {
+      return static_cast<allocator_type&>(*this);
+    }
 
     pointer data = nullptr;
     pointer end = nullptr;
@@ -789,7 +738,7 @@ class _ArrayList_impl {  // NOLINT
 };
 
 template <typename Type, typename Allocator = std::allocator<Type>>
-using ArrayList = _ArrayList_impl<Type, Allocator>;
+using ArrayList = ArrayListImpl<Type, Allocator>;
 
 }  // namespace al
 
