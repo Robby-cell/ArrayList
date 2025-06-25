@@ -1,28 +1,18 @@
 BUILD_DIR = build
-BIN = ${BUILD_DIR}/array_list
+BIN = ${BUILD_DIR}/Debug/array_list
 
-TEST = ${BUILD_DIR}/tests/test
-
-export VCPKG_ROOT
-
-DEBUG_FLAGS = -DCMAKE_BUILD_TYPE=Debug
-RELEASE_FLAGS = -DCMAKE_BUILD_TYPE=Release
+TEST = ${BUILD_DIR}/Debug/tests/test
 
 run: debug
 	./${BIN}
 
-debug: ${BUILD_DIR}/
-	cd build && \
-	cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" ${DEBUG_FLAGS} && \
-	cmake --build .
+debug:
+	conan install . --build=missing -sbuild_type=Debug -pr=clang   && \
+	conan build . -sbuild_type=Debug -pr=clang
 
-release: ${BUILD_DIR}/
-	cd build && \
-	cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" ${RELEASE_FLAGS} && \
-	cmake --build .
+release:
+	conan install . --build=missing -sbuild_type=Release -pr=clang && \
+	conan build . -sbuild_type=Release -pr=clang
 
 test: debug
 	./${TEST}
-
-build/:
-	mkdir build

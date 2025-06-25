@@ -1,10 +1,14 @@
-#include <array>
+// Testing
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+// StdLib
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
 
+// ArrayList
 #include "al/array_list.hpp"
 
 TEST_CASE("Basic functionality") {
