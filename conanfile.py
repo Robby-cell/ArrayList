@@ -5,7 +5,7 @@ from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 class ArrayListRecipe(ConanFile):
     name = "arraylist"
     version = "0.1"
-    package_type = "application"
+    package_type = "library"
 
     # Optional metadata
     license = "MIT"
@@ -19,6 +19,15 @@ class ArrayListRecipe(ConanFile):
 
     # Sources are located in the same place as this recipe, copy them to the recipe
     exports_sources = "CMakeLists.txt", "include/*"
+
+    options = {
+        "shared": [False],
+        "fPIC": [True, False],
+    }
+    default_options = {
+        "shared": False,
+        "fPIC": True,
+    }
 
     def requirements(self):
         self.test_requires("catch2/3.8.0")
