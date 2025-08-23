@@ -69,19 +69,6 @@
 
 namespace al {
 
-#if HAS_CXX20
-using std::remove_cvref_t;
-#else   // ^^^ HAS_CXX20
-// NOLINTBEGIN
-template <typename Type>
-using remove_cvref_t =
-    typename std::remove_cv<typename std::remove_reference<Type>::type>::type;
-// NOLINTEND
-#endif  // ^^^ !HAS_CXX20
-
-#ifdef AL_NODISCARD
-#undef AL_NODISCARD
-#endif
 #define AL_NODISCARD [[nodiscard]]
 
 #if HAS_CONCEPTS
@@ -117,37 +104,6 @@ constexpr inline bool IsIteratorCategory =
 template <class Iter>
 constexpr inline bool IsRandomAccessIterator =
     IsIteratorCategory<Iter, std::random_access_iterator_tag>;
-
-template <class Iter, class = void>
-constexpr inline bool AllowInheritingUnwrap = true;
-// ^^^ MSVC iterators can be weird, might need something with this in future
-
-template <class Iter, class = void>
-constexpr inline bool IsUnwrappable = false;
-
-template <class Iter>
-constexpr inline bool IsUnwrappable<
-    Iter, std::void_t<decltype(std::declval<al::remove_cvref_t<Iter>&>())>> =
-    AllowInheritingUnwrap<al::remove_cvref_t<Iter>>;
-
-template <class Iter, class = void>
-constexpr inline bool HasNothrowUnwrapped = false;
-template <class Iter>
-constexpr inline bool
-    HasNothrowUnwrapped<Iter, std::void_t<decltype(std::declval<Iter>())>> =
-        noexcept(std::declval<Iter>());
-
-template <class Iter>
-constexpr auto get_unwrapped(Iter&& it) noexcept(
-    not IsUnwrappable<Iter> or HasNothrowUnwrapped<Iter>) -> decltype(auto) {
-  if constexpr (std::is_pointer_v<std::decay_t<Iter>>) {
-    return it + 0;
-  } else if constexpr (IsUnwrappable<Iter>) {
-    return static_cast<Iter&&>(it);
-  } else {
-    return static_cast<Iter&&>(it);
-  }
-}
 
 template <typename Iter>
 struct IterType {
@@ -186,7 +142,7 @@ struct ArrayListDefaultGrowthDifference {
 
 template <typename Type, typename Allocator = std::allocator<Type>>
 #if HAS_CONCEPTS
-  requires(std::is_same_v<Type, std::remove_reference_t<Type>>)
+  requires(std::is_object<Type>::value)
 #endif
 class ArrayListImpl {
   static_assert(
@@ -255,16 +211,13 @@ class ArrayListImpl {
                                 const allocator_type& alloc = allocator_type())
       : compressed_(alloc) {
     if constexpr (detail::IsRandomAccessIterator<Iter>) {
-      const auto ufirst = detail::get_unwrapped(first);
-      const auto ulast = detail::get_unwrapped(last);
-
-      const auto length = static_cast<size_t>(std::distance(ufirst, ulast));
+      const auto length = static_cast<size_t>(std::distance(first, last));
 
       compressed_.data = AltyTraits::allocate(get_allocator(), length);
       compressed_.end = compressed_.data + length;
       compressed_.current = compressed_.data + length;
 
-      std::uninitialized_copy(ufirst, ulast, compressed_.data);
+      std::uninitialized_copy(first, last, compressed_.data);
     } else {
       for (; first != last; ++first) {
         push_back(*first);
@@ -316,13 +269,10 @@ class ArrayListImpl {
   template <typename Iter, std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
   // NOLINTEND
   constexpr auto push_back(Iter first, Iter last) -> void {
-    const auto ufirst = detail::get_unwrapped(first);
-    const auto ulast = detail::get_unwrapped(last);
-
-    const auto length = std::distance(ufirst, ulast);
+    const auto length = std::distance(first, last);
     ensure_size_for_elements(length);
 
-    std::uninitialized_copy(ufirst, ulast, compressed_.current);
+    std::uninitialized_copy(first, last, compressed_.current);
     compressed_.current += length;
   }
 
@@ -615,7 +565,8 @@ class ArrayListImpl {
     std::swap(compressed_, other.compressed_);
   }
 
-  struct Compressed : public allocator_type {
+  struct Compressed : private allocator_type {
+   public:
     constexpr Compressed(pointer data, pointer end, pointer current)
         : data(data), end(end), current(current) {}
     constexpr explicit Compressed(pointer data,
@@ -627,6 +578,10 @@ class ArrayListImpl {
 
     constexpr auto get_allocator() noexcept -> allocator_type& {
       return static_cast<allocator_type&>(*this);
+    }
+
+    constexpr auto get_allocator() const noexcept -> const allocator_type& {
+      return static_cast<const allocator_type&>(*this);
     }
 
     pointer data = nullptr;
