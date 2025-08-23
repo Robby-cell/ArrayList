@@ -9,9 +9,11 @@
 
 #define HAS_CXX20 (CPP_DEF >= 202002UL)
 #define HAS_CXX17 (CPP_DEF >= 201703UL)
+#define HAS_CXX14 (CPP_DEF >= 201402UL)
+#define HAS_CXX11 (CPP_DEF >= 201103UL)
 
-#if !HAS_CXX17
-#error "This library requires C++17 or higher"
+#if !HAS_CXX11
+#error "This library requires C++11 or higher"
 #endif
 
 #if HAS_CXX17
@@ -96,6 +98,11 @@ template <class Type>
 constexpr inline bool IsIterator<Type, std::void_t<IterConcatenateType<Type>>> =
     true;
 
+#if HAS_CONCEPTS
+template <typename Type>
+concept Iterator = IsIterator<Type>;
+#endif  // ^^^ HAS_CONCEPTS
+
 template <class Iter, class WantedIter>
 constexpr inline bool IsIteratorCategory =
     std::is_same_v<typename std::iterator_traits<Iter>::iterator_category,
@@ -141,10 +148,8 @@ struct ArrayListDefaultGrowthDifference {
 };
 
 template <typename Type, typename Allocator = std::allocator<Type>>
-#if HAS_CONCEPTS
-    requires(std::is_object<Type>::value)
-#endif
-class ArrayListImpl {
+REQUIRES(std::is_object<Type>::value)
+class ArrayList {
     static_assert(
         std::is_same_v<Type, typename Allocator::value_type>,
         "Requires allocator's type to match the type held by the ArrayList");
@@ -196,9 +201,9 @@ class ArrayListImpl {
     }
 
    public:
-    constexpr ArrayListImpl() noexcept : compressed_() {}
+    constexpr ArrayList() noexcept : compressed_() {}
 
-    CONSTEXPR_CXX20 explicit ArrayListImpl(
+    CONSTEXPR_CXX20 explicit ArrayList(
         const size_type capacity,
         const allocator_type& alloc = allocator_type())
         : compressed_(AltyTraits::allocate(get_allocator(), capacity), alloc) {
@@ -206,11 +211,15 @@ class ArrayListImpl {
         compressed_.current = compressed_.data;
     }
 
-    // NOLINTBEGIN
+// NOLINTBEGIN
+#if HAS_CONCEPTS
+    template <detail::Iterator Iter>
+#else
     template <typename Iter,
               std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-    CONSTEXPR_CXX20 ArrayListImpl(
-        Iter first, Iter last, const allocator_type& alloc = allocator_type())
+#endif
+    CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
+                              const allocator_type& alloc = allocator_type())
         : compressed_(alloc) {
         if constexpr (detail::IsRandomAccessIterator<Iter>) {
             const auto length = static_cast<size_t>(std::distance(first, last));
@@ -227,32 +236,35 @@ class ArrayListImpl {
         }
     }
 
-    CONSTEXPR_CXX20 ArrayListImpl(
-        std::initializer_list<Type> list,
-        const allocator_type& alloc = allocator_type())
-        : ArrayListImpl(list.begin(), list.end(), alloc) {}
+    CONSTEXPR_CXX20 ArrayList(std::initializer_list<Type> list,
+                              const allocator_type& alloc = allocator_type())
+        : ArrayList(list.begin(), list.end(), alloc) {}
 
     template <CONSTRAINT(IterableContainer) Container>
-    CONSTEXPR_CXX20 explicit ArrayListImpl(
+    CONSTEXPR_CXX20 explicit ArrayList(
         const Container& container,
         const allocator_type& alloc = allocator_type())
-        : ArrayListImpl(container.begin(), container.end(), alloc) {}
+        : ArrayList(container.begin(), container.end(), alloc) {
+        const auto container_size = std::size(container);
+        reserve(container_size);
+        std::uninitialized_copy(std::begin(container), std::end(container),
+                                compressed_.data);
+        compressed_.current = compressed_.data + container_size;
+    }
 
-    CONSTEXPR_CXX20 ArrayListImpl(
-        const ArrayListImpl& other,
-        const allocator_type& alloc = allocator_type())
-        : ArrayListImpl(other.begin(), other.end(), alloc) {}
-    constexpr ArrayListImpl(ArrayListImpl&& other) noexcept
+    CONSTEXPR_CXX20 ArrayList(const ArrayList& other,
+                              const allocator_type& alloc = allocator_type())
+        : ArrayList(other.begin(), other.end(), alloc) {}
+    constexpr ArrayList(ArrayList&& other) noexcept
         : compressed_(std::exchange(other.compressed_, Compressed())) {}
 
-    CONSTEXPR_CXX20 auto operator=(const ArrayListImpl& other)
-        -> ArrayListImpl& {
+    CONSTEXPR_CXX20 auto operator=(const ArrayList& other) -> ArrayList& {
         if (this != std::addressof(other)) {
             copy_safe(other);
         }
         return *this;
     }
-    constexpr auto operator=(ArrayListImpl&& other) noexcept -> ArrayListImpl& {
+    constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
         destruct_all_elements();
         deallocate_ptr();
 
@@ -261,7 +273,7 @@ class ArrayListImpl {
         return *this;
     }
 
-    CONSTEXPR_CXX20 ~ArrayListImpl() {
+    CONSTEXPR_CXX20 ~ArrayList() {
         destruct_all_elements();
         deallocate_ptr();
     }
@@ -457,6 +469,42 @@ class ArrayListImpl {
     }
 
    private:
+    constexpr operator bool() const noexcept {  // NOLINT
+        return !empty();
+    }
+
+    friend constexpr auto operator==(const ArrayList& self,
+                                     const ArrayList& that) noexcept -> bool {
+        if (self.size() != that.size()) {
+            return false;
+        }
+        for (auto it = self.begin(), it2 = that.begin(); it != self.end();
+             ++it, ++it2) {
+            if (*it != *it2) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    friend constexpr auto operator<(const ArrayList& self,
+                                    const ArrayList& that) noexcept -> bool {
+        auto it = self.begin();
+        auto it2 = that.begin();
+        for (; it != self.end() && it2 != that.end(); ++it, ++it2) {
+            if (!(*it < *it2)) {
+                return false;
+            }
+        }
+        if (it != self.end()) {
+            return false;
+        }
+        if (it2 == that.end()) {
+            return false;
+        }
+        return true;
+    }
+
     CONSTEXPR_CXX20 void raw_reserve(const size_type capacity) {
         const auto length = size();
         compressed_.data = AltyTraits::allocate(get_allocator(), capacity);
@@ -464,7 +512,7 @@ class ArrayListImpl {
         compressed_.end = compressed_.data + capacity;
     }
 
-    CONSTEXPR_CXX20 void copy_safe(const ArrayListImpl& other) {
+    CONSTEXPR_CXX20 void copy_safe(const ArrayList& other) {
         destruct_all_elements();
         deallocate_ptr();
 
@@ -472,7 +520,7 @@ class ArrayListImpl {
         copy_unsafe(other);
     }
 
-    CONSTEXPR_CXX20 void copy_unsafe(const ArrayListImpl& other) {
+    CONSTEXPR_CXX20 void copy_unsafe(const ArrayList& other) {
         const auto length{other.size()};
         compressed_.current = compressed_.data + length;
         std::uninitialized_copy_n(other.compressed_.data, length,
@@ -571,7 +619,7 @@ class ArrayListImpl {
         deallocate_target_ptr(data(), capacity());
     }
 
-    constexpr auto swap_with_other(ArrayListImpl& other) -> void {
+    constexpr auto swap_with_other(ArrayList& other) -> void {
         std::swap(compressed_, other.compressed_);
     }
 
@@ -601,9 +649,6 @@ class ArrayListImpl {
 
     Compressed compressed_;
 };
-
-template <typename Type, typename Allocator = std::allocator<Type>>
-using ArrayList = ArrayListImpl<Type, Allocator>;
 
 }  // namespace al
 
