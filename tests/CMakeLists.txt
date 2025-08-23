@@ -12,4 +12,18 @@ set_target_properties(run-tests
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF)
 
+add_library(c++11-test STATIC
+  c++11.cpp
+  c++11.hpp)
+target_link_libraries(c++11-test PRIVATE Catch2::Catch2)
+target_link_libraries(c++11-test PRIVATE array_list)
+
+set_target_properties(c++11-test
+  PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+
+target_link_libraries(run-tests PRIVATE c++11-test)
+
 add_test(AllTestsInMain run-tests)

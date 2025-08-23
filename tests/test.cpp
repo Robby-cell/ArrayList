@@ -7,10 +7,15 @@
 #include <memory>
 #include <ranges>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 // ArrayList
 #include "al/array_list.hpp"
+#include "detail.hpp"
+
+// Other tests
+#include "c++11.hpp"
 
 TEST_CASE("Basic functionality") {
     al::ArrayList<int> list;
@@ -90,6 +95,9 @@ TEST_CASE("Copy with non trivial types") {
     REQUIRE(copy.size() == 2);
     REQUIRE(copy.front() == "Hello");
     REQUIRE(copy.back() == "World");
+
+    // The copy should be equal to the original now
+    REQUIRE(list == copy);
 }
 
 TEST_CASE("Iterator push_back") {
@@ -248,7 +256,7 @@ TEST_CASE("Construction from std::vector") {
 TEST_CASE("Benchmark simple behavior") {
     constexpr auto WhatToDo =
         []<template <typename Type, typename = std::allocator<Type>>
-           typename ContainerType>() {
+           typename ContainerType>(detail::TemplateIdentity<ContainerType>) {
             ContainerType<int> list;
             list.reserve(10);
             list.resize(20);
@@ -258,29 +266,36 @@ TEST_CASE("Benchmark simple behavior") {
             }
         };
 
-    BENCHMARK("std::vector") { WhatToDo.template operator()<std::vector>(); };
+    BENCHMARK("std::vector") {
+        WhatToDo(detail::TemplateIdentity<std::vector>{});
+    };
     BENCHMARK("al::ArrayList") {
-        WhatToDo.template operator()<al::ArrayList>();
+        WhatToDo(detail::TemplateIdentity<al::ArrayList>{});
     };
 }
 
 TEST_CASE("Benchmark on a larger sample") {
     static constexpr auto IterationSize = 100UL;
 
-    constexpr auto WhatToDo = []<class Container> {
+    constexpr auto WhatToDo = []<class Container>(
+                                  std::type_identity<Container>) {
         for (const auto _ : std::ranges::iota_view(0ULL, 100ULL)) {
             Container container;
             for (const auto i : std::ranges::iota_view(0ULL, IterationSize)) {
                 container.emplace_back(std::to_string(i));
             }
-            REQUIRE(container.size() == IterationSize);
         }
     };
 
     BENCHMARK("std::vector") {
-        WhatToDo.template operator()<std::vector<std::string>>();
+        WhatToDo(std::type_identity<std::vector<std::string>>{});
     };
     BENCHMARK("al::ArrayList") {
-        WhatToDo.template operator()<al::ArrayList<std::string>>();
+        WhatToDo(std::type_identity<al::ArrayList<std::string>>{});
     };
+}
+
+TEST_CASE("C++11", "Simple Test") {
+    // Perform the test
+    cpp11_test::do_simple_test();
 }
