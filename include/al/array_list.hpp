@@ -51,22 +51,20 @@
 #define REQUIRES(...)
 #endif
 
-#if (defined(__clang__) && !defined(_MSC_VER))
-#define CLANG 1
-#else
-#define CLANG 0
-#endif
-
-#if defined(__GNUC__)
-#define GCC 1
-#else
-#define GCC 0
-#endif
-
 #if defined(_MSC_VER)
 #define MSVC 1
-#else
+#define CLANG 0
+#define GCC 0
+#elif defined(__clang__)
+#define CLANG 1
 #define MSVC 0
+#define GCC 0
+#elif defined(__GNUC__)
+#define GCC 1
+#define MSVC 0
+#define CLANG 0
+#else
+#error "Invalid compiler"
 #endif
 
 namespace al {
