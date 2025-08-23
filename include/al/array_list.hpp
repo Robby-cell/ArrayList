@@ -38,7 +38,7 @@
 #include <utility>
 
 #if HAS_CONCEPTS
-#include <concepts>
+#include <concepts>  // IWYU pragma: keep
 #endif
 
 #if HAS_CONCEPTS
