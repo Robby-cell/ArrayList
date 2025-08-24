@@ -89,23 +89,19 @@ template <class Iter>
 using IterConcatenateType =
     typename std::iterator_traits<Iter>::iterator_category;
 
-using Yes = char;
-using No = int;
-static_assert(sizeof(Yes) != sizeof(No), "Size of Yes and No should be unique");
-
 template <typename T>
 struct IsIteratorHelper {
     template <typename U>
     static auto test(typename std::iterator_traits<U>::iterator_category*)
-        -> Yes;
+        -> std::true_type;
 
     template <typename U>
-    static auto test(...) -> No;
+    static auto test(...) -> std::false_type;
 };
 
 template <typename T>
 constexpr inline bool IsIteratorV =
-    sizeof(IsIteratorHelper<T>::template test<T>(nullptr)) == sizeof(Yes);
+    decltype(IsIteratorHelper<T>::template test<T>(nullptr))::value;
 
 template <typename T>
 struct IsIterator : std::bool_constant<IsIteratorV<T>> {};
