@@ -715,12 +715,21 @@ class ArrayList {
 
     struct Compressed : private allocator_type {
        public:
-        constexpr Compressed(pointer data, pointer end, pointer current)
-            : data(data), end(end), current(current) {}
+        constexpr Compressed(pointer data, pointer end, pointer current,
+                             const allocator_type& ally = allocator_type())
+            : allocator_type(ally), data(data), end(end), current(current) {}
+
+        constexpr explicit Compressed(
+            pointer data, pointer end,
+            const allocator_type& ally = allocator_type())
+            : Compressed(data, end, data, ally) {}
+
         constexpr explicit Compressed(
             pointer data, const allocator_type& ally = allocator_type())
-            : allocator_type(ally), data(data), end(data), current(data) {}
+            : Compressed(data, data, data, ally) {}
+
         constexpr Compressed() = default;
+
         constexpr explicit Compressed(const allocator_type& ally)
             : allocator_type(ally) {}
 
