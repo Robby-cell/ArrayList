@@ -265,6 +265,7 @@ class ArrayList {
     CONSTEXPR_CXX20 ArrayList(const ArrayList& other,
                               const allocator_type& alloc = allocator_type())
         : ArrayList(other.begin(), other.end(), alloc) {}
+
     constexpr ArrayList(ArrayList&& other) noexcept
         : compressed_(std::exchange(other.compressed_, Compressed())) {}
 
@@ -274,6 +275,7 @@ class ArrayList {
         }
         return *this;
     }
+
     constexpr auto operator=(ArrayList&& other) noexcept -> ArrayList& {
         destruct_all_elements();
         deallocate_ptr();
@@ -292,10 +294,13 @@ class ArrayList {
         return compressed_.data == compressed_.current;
     }
 
-    // NOLINTBEGIN
+#if HAS_CONCEPTS
+    template <typename Iter>
+        requires(detail::IsIterator<Iter>)
+#else
     template <typename Iter,
-              std::enable_if_t<detail::IsIterator<Iter>, int> = 0>
-    // NOLINTEND
+              typename std::enable_if<detail::IsIterator<Iter>, int>::type = 0>
+#endif
     constexpr auto push_back(Iter first, Iter last) -> void {
         const auto length = std::distance(first, last);
         ensure_size_for_elements(length);
@@ -308,10 +313,12 @@ class ArrayList {
         ensure_size_for_elements(1_UZ);
         raw_push_back(value);
     }
+
     CONSTEXPR_CXX20 auto push_back(Type&& value) -> void {
         ensure_size_for_elements(1_UZ);
         raw_push_back(std::move(value));
     }
+
     template <typename... Args>
     CONSTEXPR_CXX20 auto emplace_back(Args&&... args) -> value_type& {
         ensure_size_for_elements(1_UZ);
@@ -376,14 +383,17 @@ class ArrayList {
         -> reference {
         return compressed_.data[index];
     }
+
     AL_NODISCARD constexpr auto operator[](const size_type index) const noexcept
         -> const_reference {
         return compressed_.data[index];
     }
+
     AL_NODISCARD constexpr auto at(const size_type index) -> reference {
         ensure_in_range(index);
         return compressed_.data[index];
     }
+
     AL_NODISCARD constexpr auto at(const size_type index) const
         -> const_reference {
         ensure_in_range(index);
@@ -397,6 +407,7 @@ class ArrayList {
     AL_NODISCARD constexpr auto data() noexcept -> pointer {
         return compressed_.data;
     }
+
     AL_NODISCARD constexpr auto data() const noexcept -> const_pointer {
         return compressed_.data;
     }
@@ -405,6 +416,7 @@ class ArrayList {
         ensure_not_empty();
         return *compressed_.data;
     }
+
     AL_NODISCARD constexpr auto front() const -> const_reference {
         ensure_not_empty();
         return *compressed_.data;
@@ -414,6 +426,7 @@ class ArrayList {
         ensure_not_empty();
         return *(compressed_.current - 1);
     }
+
     AL_NODISCARD constexpr auto back() const -> const_reference {
         ensure_not_empty();
         return *(compressed_.current - 1);
@@ -422,39 +435,50 @@ class ArrayList {
     AL_NODISCARD constexpr auto begin() noexcept -> iterator {
         return iterator(compressed_.data);
     }
+
     AL_NODISCARD constexpr auto end() noexcept -> iterator {
         return iterator(compressed_.current);
     }
+
     AL_NODISCARD constexpr auto begin() const noexcept -> const_iterator {
         return const_iterator(compressed_.data);
     }
+
     AL_NODISCARD constexpr auto end() const noexcept -> const_iterator {
         return const_iterator(compressed_.current);
     }
+
     AL_NODISCARD constexpr auto cbegin() const noexcept -> const_iterator {
         return const_iterator(compressed_.data);
     }
+
     AL_NODISCARD constexpr auto cend() const noexcept -> const_iterator {
         return const_iterator(compressed_.current);
     }
+
     AL_NODISCARD constexpr auto rbegin() noexcept -> reverse_iterator {
         return reverse_iterator(end());
     }
+
     AL_NODISCARD constexpr auto rend() noexcept -> reverse_iterator {
         return reverse_iterator(begin());
     }
+
     AL_NODISCARD constexpr auto rbegin() const noexcept
         -> const_reverse_iterator {
         return const_reverse_iterator(end());
     }
+
     AL_NODISCARD constexpr auto rend() const noexcept
         -> const_reverse_iterator {
         return const_reverse_iterator(begin());
     }
+
     AL_NODISCARD constexpr auto crbegin() const noexcept
         -> const_reverse_iterator {
         return rbegin();
     }
+
     AL_NODISCARD constexpr auto crend() const noexcept
         -> const_reverse_iterator {
         return rend();
@@ -559,15 +583,18 @@ class ArrayList {
             reserve(new_capacity);
         }
     }
+
     CONSTEXPR_CXX20 void grow_capacity() { return ensure_size_for_elements(1); }
 
     template <typename... Args>
     CONSTEXPR_CXX20 auto raw_emplace_back(Args&&... args) -> value_type& {
         return emplace_at_back(std::forward<Args>(args)...);
     }
+
     CONSTEXPR_CXX20 auto raw_push_back(const Type& value) -> void {
         push_at_back(value);
     }
+
     CONSTEXPR_CXX20 auto raw_push_back(Type&& value) -> void {
         push_at_back(std::move(value));
     }
@@ -578,10 +605,12 @@ class ArrayList {
         new (my_ptr) value_type(std::forward<Args>(args)...);
         return *my_ptr;
     }
+
     constexpr auto raw_push_into(value_type* const my_ptr,
                                  const Type& value) -> void {
         new (my_ptr) value_type(value);
     }
+
     CONSTEXPR_CXX20 auto raw_push_into(value_type* const my_ptr,
                                        Type&& value) -> void {
         AltyTraits::construct(get_allocator(), my_ptr, std::move(value));
@@ -592,38 +621,55 @@ class ArrayList {
         return raw_emplace_into(compressed_.current++,
                                 std::forward<Args>(args)...);
     }
+
     CONSTEXPR_CXX20 auto push_at_back(const Type& value) -> void {
         raw_push_into(compressed_.current++, value);
     }
+
     CONSTEXPR_CXX20 auto push_at_back(Type&& value) -> void {
         raw_push_into(compressed_.current++, std::move(value));
     }
 
-    template <typename>
-    CONSTEXPR_CXX20 auto DestroyInPlaceImpl(Type* value) noexcept;
-
-    template <>
-    CONSTEXPR_CXX20 auto DestroyInPlaceImpl<std::true_type>(
-        Type* value) noexcept {
+#if !HAS_CONCEPTS
+    template <
+        typename std::enable_if<
+            std::is_array<typename std::remove_pointer<Type>::type>::value,
+            int>::type = 0>
+#endif
+    CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept -> void
+#if HAS_CONCEPTS
+        requires(std::is_array<typename std::remove_pointer<Type>::type>::value)
+#endif
+    {
         for (auto& element : *value) {
             (destroy_in_place)(get_allocator(), std::addressof(element));
         }
     }
 
-    template <>
-    CONSTEXPR_CXX20 auto DestroyInPlaceImpl<std::false_type>(
-        Type* value) noexcept {
+#if !HAS_CONCEPTS
+    template <
+        typename std::enable_if<
+            not std::is_array<typename std::remove_pointer<Type>::type>::value,
+            int>::type = 0>
+#endif
+    CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept -> void
+#if HAS_CONCEPTS
+        requires(
+            not std::is_array<typename std::remove_pointer<Type>::type>::value)
+#endif
+    {
         AltyTraits::destroy(get_allocator(), value);
     }
 
-    CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept -> void {
-        DestroyInPlaceImpl<std::is_array<Type>::value>(value);
-    }
-
+#if HAS_CONCEPTS
+    template <typename It, typename Sentinel>
+        requires(not std::is_trivially_destructible<Type>::value)
+#else
     template <
         typename It, typename Sentinel,
         typename std::enable_if<not std::is_trivially_destructible<Type>::value,
                                 int>::type = 0>
+#endif
     CONSTEXPR_CXX20 auto destroy_range(It first,
                                        Sentinel last) noexcept -> void {
         for (; first != last; ++first) {
@@ -631,21 +677,41 @@ class ArrayList {
         }
     }
 
+#if HAS_CONCEPTS
+    template <typename It, typename Sentinel>
+        requires(std::is_trivially_destructible<Type>::value)
+#else
     template <typename It, typename Sentinel,
               typename std::enable_if<
                   std::is_trivially_destructible<Type>::value, int>::type = 0>
+#endif
     CONSTEXPR_CXX20 auto destroy_range(It first,
-                                       Sentinel last) noexcept -> void {}
+                                       Sentinel last) noexcept -> void {
+    }
 
+#if HAS_CONCEPTS
+    template <typename It, typename Sentinel>
+        requires(not std::is_trivially_destructible<Type>::value)
+#else
     template <
+        typename It, typename Sentinel,
         typename std::enable_if<not std::is_trivially_destructible<Type>::value,
                                 int>::type = 0>
+#endif
     CONSTEXPR_CXX20 auto destruct_all_elements() noexcept -> void {
         destroy_range(compressed_.data, compressed_.current);
     }
-    template <typename std::enable_if<
+
+#if HAS_CONCEPTS
+    template <typename It, typename Sentinel>
+        requires(std::is_trivially_destructible<Type>::value)
+#else
+    template <typename It, typename Sentinel,
+              typename std::enable_if<
                   std::is_trivially_destructible<Type>::value, int>::type = 0>
-    CONSTEXPR_CXX20 auto destruct_all_elements() noexcept -> void {}
+#endif
+    CONSTEXPR_CXX20 auto destruct_all_elements() noexcept -> void {
+    }
 
     CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
                                                const size_type length) -> void {
