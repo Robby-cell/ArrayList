@@ -715,8 +715,9 @@ class ArrayList {
 
     struct Compressed : private allocator_type {
        public:
-        constexpr Compressed(pointer data, pointer end, pointer current,
-                             const allocator_type& ally = allocator_type())
+        constexpr explicit Compressed(
+            pointer data, pointer end, pointer current,
+            const allocator_type& ally = allocator_type())
             : allocator_type(ally), data(data), end(end), current(current) {}
 
         constexpr explicit Compressed(
