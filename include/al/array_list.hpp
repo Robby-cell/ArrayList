@@ -89,16 +89,30 @@ template <class Iter>
 using IterConcatenateType =
     typename std::iterator_traits<Iter>::iterator_category;
 
-template <class Type, class = void>
-constexpr inline bool IsIterator = false;
+using Yes = char;
+using No = int;
+static_assert(sizeof(Yes) != sizeof(No), "Size of Yes and No should be unique");
 
-template <class Type>
-constexpr inline bool IsIterator<Type, std::void_t<IterConcatenateType<Type>>> =
-    true;
+template <typename T>
+struct IsIteratorHelper {
+    template <typename U>
+    static auto test(typename std::iterator_traits<U>::iterator_category*)
+        -> Yes;
+
+    template <typename U>
+    static auto test(...) -> No;
+};
+
+template <typename T>
+constexpr inline bool IsIteratorV =
+    sizeof(IsIteratorHelper<T>::template test<T>(nullptr)) == sizeof(Yes);
+
+template <typename T>
+struct IsIterator : std::bool_constant<IsIteratorV<T>> {};
 
 #if HAS_CONCEPTS
 template <typename Type>
-concept Iterator = IsIterator<Type>;
+concept Iterator = IsIteratorV<Type>;
 #endif  // ^^^ HAS_CONCEPTS
 
 template <class Iter, class WantedIter>
@@ -126,6 +140,60 @@ template <typename Iter>
 struct IterType<Iter[]> {
     using value_type = Iter;  // NOLINT
 };
+
+template <class AltyTraits, class Type, class Ally>
+CONSTEXPR_CXX20 auto destroy_in_place(Type* value, Ally&& ally) noexcept ->
+    typename std::enable_if<
+        std::is_array<typename std::remove_pointer<Type>::type>::value,
+        void>::type {
+    for (auto& element : *value) {
+        destroy_in_place<AltyTraits>(std::addressof(element),
+                                     std::forward<Ally>(ally));
+    }
+}
+
+template <class AltyTraits, class Type, class Ally>
+CONSTEXPR_CXX20 auto destroy_in_place(Type* value, Ally&& ally) noexcept ->
+    typename std::enable_if<
+        !std::is_array<typename std::remove_pointer<Type>::type>::value,
+        void>::type {
+    AltyTraits::destroy(std::forward<Ally>(ally), value);
+}
+
+template <typename AltyTraits, typename It, typename Sentinel, class Ally>
+CONSTEXPR_CXX20 auto destroy_range(It first, Sentinel last,
+                                   Ally&& ally) noexcept ->
+    typename std::enable_if<
+        !std::is_trivially_destructible<typename AltyTraits::value_type>::value,
+        void>::type {
+    for (; first != last; ++first) {
+        destroy_in_place<AltyTraits>(std::addressof(*first),
+                                     std::forward<Ally>(ally));
+    }
+}
+
+template <typename AltyTraits, typename It, typename Sentinel, class Ally>
+CONSTEXPR_CXX20 auto destroy_range(It first, Sentinel last,
+                                   Ally&& ally) noexcept ->
+    typename std::enable_if<
+        std::is_trivially_destructible<typename AltyTraits::value_type>::value,
+        void>::type {}
+
+template <class AltyTraits, class It, class Sentinel, class Ally>
+CONSTEXPR_CXX20 auto destruct_all_elements(It begin, Sentinel end,
+                                           Ally&& ally) noexcept ->
+    typename std::enable_if<
+        !std::is_trivially_destructible<typename AltyTraits::value_type>::value,
+        void>::type {
+    destroy_range<AltyTraits>(begin, end, std::forward<Ally>(ally));
+}
+
+template <class AltyTraits, class It, class Sentinel, class Ally>
+CONSTEXPR_CXX20 auto destruct_all_elements(It begin, Sentinel end,
+                                           Ally&& ally) noexcept ->
+    typename std::enable_if<
+        std::is_trivially_destructible<typename AltyTraits::value_type>::value,
+        void>::type {}
 
 }  // namespace detail
 
@@ -232,10 +300,10 @@ class ArrayList {
 
 #if HAS_CONCEPTS
     template <typename Iter>
-        requires(not detail::IsRandomAccessIterator<Iter>)
+        requires(!detail::IsRandomAccessIterator<Iter>)
 #else
     template <typename Iter,
-              typename std::enable_if<not detail::IsRandomAccessIterator<Iter>,
+              typename std::enable_if<!detail::IsRandomAccessIterator<Iter>,
                                       int>::type = 0>
 #endif
     CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
@@ -296,10 +364,10 @@ class ArrayList {
 
 #if HAS_CONCEPTS
     template <typename Iter>
-        requires(detail::IsIterator<Iter>)
+        requires(detail::IsIteratorV<Iter>)
 #else
     template <typename Iter,
-              typename std::enable_if<detail::IsIterator<Iter>, int>::type = 0>
+              typename std::enable_if<detail::IsIteratorV<Iter>, int>::type = 0>
 #endif
     constexpr auto push_back(Iter first, Iter last) -> void {
         const auto length = std::distance(first, last);
@@ -630,87 +698,20 @@ class ArrayList {
         raw_push_into(compressed_.current++, std::move(value));
     }
 
-#if !HAS_CONCEPTS
-    template <
-        typename std::enable_if<
-            std::is_array<typename std::remove_pointer<Type>::type>::value,
-            int>::type = 0>
-#endif
-    CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept -> void
-#if HAS_CONCEPTS
-        requires(std::is_array<typename std::remove_pointer<Type>::type>::value)
-#endif
-    {
-        for (auto& element : *value) {
-            (destroy_in_place)(get_allocator(), std::addressof(element));
-        }
-    }
-
-#if !HAS_CONCEPTS
-    template <
-        typename std::enable_if<
-            not std::is_array<typename std::remove_pointer<Type>::type>::value,
-            int>::type = 0>
-#endif
-    CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept -> void
-#if HAS_CONCEPTS
-        requires(
-            not std::is_array<typename std::remove_pointer<Type>::type>::value)
-#endif
-    {
+    CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept -> void {
         AltyTraits::destroy(get_allocator(), value);
+        detail::destroy_in_place<AltyTraits>(value, get_allocator());
     }
 
-#if HAS_CONCEPTS
     template <typename It, typename Sentinel>
-        requires(not std::is_trivially_destructible<Type>::value)
-#else
-    template <
-        typename It, typename Sentinel,
-        typename std::enable_if<not std::is_trivially_destructible<Type>::value,
-                                int>::type = 0>
-#endif
     CONSTEXPR_CXX20 auto destroy_range(It first,
                                        Sentinel last) noexcept -> void {
-        for (; first != last; ++first) {
-            destroy_in_place(std::addressof(*first));
-        }
+        detail::destroy_range<AltyTraits>(first, last, get_allocator());
     }
 
-#if HAS_CONCEPTS
-    template <typename It, typename Sentinel>
-        requires(std::is_trivially_destructible<Type>::value)
-#else
-    template <typename It, typename Sentinel,
-              typename std::enable_if<
-                  std::is_trivially_destructible<Type>::value, int>::type = 0>
-#endif
-    CONSTEXPR_CXX20 auto destroy_range(It first,
-                                       Sentinel last) noexcept -> void {
-    }
-
-#if HAS_CONCEPTS
-    template <typename It, typename Sentinel>
-        requires(not std::is_trivially_destructible<Type>::value)
-#else
-    template <
-        typename It, typename Sentinel,
-        typename std::enable_if<not std::is_trivially_destructible<Type>::value,
-                                int>::type = 0>
-#endif
     CONSTEXPR_CXX20 auto destruct_all_elements() noexcept -> void {
-        destroy_range(compressed_.data, compressed_.current);
-    }
-
-#if HAS_CONCEPTS
-    template <typename It, typename Sentinel>
-        requires(std::is_trivially_destructible<Type>::value)
-#else
-    template <typename It, typename Sentinel,
-              typename std::enable_if<
-                  std::is_trivially_destructible<Type>::value, int>::type = 0>
-#endif
-    CONSTEXPR_CXX20 auto destruct_all_elements() noexcept -> void {
+        detail::destruct_all_elements<AltyTraits>(begin(), end(),
+                                                  get_allocator());
     }
 
     CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
@@ -719,6 +720,7 @@ class ArrayList {
             AltyTraits::deallocate(get_allocator(), ptr, length);
         }
     }
+
     CONSTEXPR_CXX20 auto deallocate_ptr() -> void {
         deallocate_target_ptr(data(), capacity());
     }
