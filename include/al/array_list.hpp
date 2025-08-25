@@ -87,6 +87,68 @@ constexpr auto operator""_UZ(const unsigned long long value) -> size_t {
 
 namespace detail {
 
+struct First {};
+struct Second {};
+
+template <class Ty1, class Ty2,
+          bool DerivesFromFirst =
+              std::is_empty<Ty1>::value and not std::is_final<Ty1>::value>
+struct CompressedPair : private Ty1 {
+    template <typename std::enable_if<std::is_constructible<Ty1>::value and
+                                          std::is_constructible<Ty2>::value,
+                                      int>::type = 0>
+    CompressedPair() {}
+
+    template <class First, class Second>
+    AL_CONSTEXPR_CXX17 explicit CompressedPair(First&& first, Second&& second)
+        : Ty1(std::forward<First>(first)),
+          second_(std::forward<Second>(second)) {}
+
+    template <class F>
+    AL_CONSTEXPR_CXX17 explicit CompressedPair(First /* first */, F&& first)
+        : Ty1(std::forward<F>(first)) {}
+
+    template <class S>
+    AL_CONSTEXPR_CXX17 explicit CompressedPair(Second /* second */, S&& second)
+        : second_(std::forward<S>(second)) {}
+
+    auto get_first() noexcept -> Ty1& { return *this; }
+    auto get_first() const noexcept -> const Ty1& { return *this; }
+    auto get_second() noexcept -> Ty2& { return second_; }
+    auto get_second() const noexcept -> const Ty2& { return second_; }
+
+    Ty2 second_;
+};
+
+template <class Ty1, class Ty2>
+struct CompressedPair<Ty1, Ty2, false> {
+    template <typename std::enable_if<std::is_constructible<Ty1>::value and
+                                          std::is_constructible<Ty2>::value,
+                                      int>::type = 0>
+    CompressedPair() {}
+
+    template <class First, class Second>
+    AL_CONSTEXPR_CXX17 explicit CompressedPair(First&& first, Second&& second)
+        : first_(std::forward<First>(first)),
+          second_(std::forward<Second>(second)) {}
+
+    template <class F>
+    AL_CONSTEXPR_CXX17 explicit CompressedPair(First /* first */, F&& first)
+        : first_(std::forward<F>(first)) {}
+
+    template <class S>
+    AL_CONSTEXPR_CXX17 explicit CompressedPair(Second /* second */, S&& second)
+        : second_(std::forward<S>(second)) {}
+
+    auto get_first() noexcept -> Ty1& { return first_; }
+    auto get_first() const noexcept -> const Ty1& { return first_; }
+    auto get_second() noexcept -> Ty2& { return second_; }
+    auto get_second() const noexcept -> const Ty2& { return second_; }
+
+    Ty1 first_;
+    Ty2 second_;
+};
+
 template <class Iter>
 using IterConcatenateType =
     typename std::iterator_traits<Iter>::iterator_category;
@@ -244,18 +306,20 @@ class ArrayList {
     }
 
     AL_NODISCARD constexpr auto get_allocator() noexcept -> allocator_type& {
-        return compressed_.get_allocator();
+        return compressed_.get_first();
     }
 
    public:
-    constexpr ArrayList() noexcept : compressed_() {}
+    constexpr ArrayList() noexcept = default;
 
     AL_CONSTEXPR_CXX20 explicit ArrayList(
         const size_type capacity,
         const allocator_type& alloc = allocator_type())
-        : compressed_(AltyTraits::allocate(get_allocator(), capacity), alloc) {
-        compressed_.end = compressed_.data + capacity;
-        compressed_.current = compressed_.data;
+        : compressed_(
+              alloc, Payload{AltyTraits::allocate(get_allocator(), capacity)}) {
+        auto& p = payload();
+        p.end = p.data + capacity;
+        p.current = p.data;
     }
 
 // NOLINTBEGIN
@@ -269,14 +333,15 @@ class ArrayList {
 #endif
     AL_CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
                                  const allocator_type& alloc = allocator_type())
-        : compressed_(alloc) {
+        : compressed_(detail::First{}, alloc) {
         const auto length = static_cast<size_t>(std::distance(first, last));
+        auto& p = payload();
 
-        compressed_.data = AltyTraits::allocate(get_allocator(), length);
-        compressed_.end = compressed_.data + length;
-        compressed_.current = compressed_.data + length;
+        p.data = AltyTraits::allocate(get_allocator(), length);
+        p.end = p.data + length;
+        p.current = p.data + length;
 
-        std::uninitialized_copy(first, last, compressed_.data);
+        std::uninitialized_copy(first, last, p.data);
     }
 
 #if HAS_CONCEPTS
@@ -289,7 +354,7 @@ class ArrayList {
 #endif
     AL_CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
                                  const allocator_type& alloc = allocator_type())
-        : compressed_(alloc) {
+        : compressed_(detail::First{}, alloc) {
         for (; first != last; ++first) {
             push_back(*first);
         }
@@ -306,9 +371,10 @@ class ArrayList {
         : ArrayList(container.begin(), container.end(), alloc) {
         const auto container_size = std::size(container);
         reserve(container_size);
+        auto& p = payload();
         std::uninitialized_copy(std::begin(container), std::end(container),
-                                compressed_.data);
-        compressed_.current = compressed_.data + container_size;
+                                p.data);
+        p.current = p.data + container_size;
     }
 
     AL_CONSTEXPR_CXX20 ArrayList(const ArrayList& other,
@@ -340,7 +406,8 @@ class ArrayList {
     }
 
     AL_NODISCARD constexpr auto empty() const noexcept -> bool {
-        return compressed_.data == compressed_.current;
+        auto& p = payload();
+        return p.data == p.current;
     }
 
 #if HAS_CONCEPTS
@@ -354,8 +421,10 @@ class ArrayList {
         const auto length = std::distance(first, last);
         ensure_size_for_elements(length);
 
-        std::uninitialized_copy(first, last, compressed_.current);
-        compressed_.current += length;
+        auto& p = payload();
+
+        std::uninitialized_copy(first, last, p.current);
+        p.current += length;
     }
 
     AL_CONSTEXPR_CXX20 auto push_back(const Type& value) -> void {
@@ -377,12 +446,14 @@ class ArrayList {
     AL_CONSTEXPR_CXX20 void pop_back() {
         ensure_not_empty();
         // destroy it!
-        destroy_in_place(compressed_.current);
-        --compressed_.current;
+        auto& p = payload();
+        destroy_in_place(p.current);
+        --p.current;
     }
 
     AL_NODISCARD constexpr auto size() const noexcept -> size_type {
-        return compressed_.current - compressed_.data;
+        auto& p = payload();
+        return p.current - p.data;
     }
 
 #if !HAS_CONCEPTS
@@ -395,17 +466,19 @@ class ArrayList {
 #endif
     {
         const auto len = size();
+        auto& p = payload();
+
         if (new_size < len) {
-            std::destroy_n(compressed_.data + new_size, len - new_size);
+            std::destroy_n(p.data + new_size, len - new_size);
         }
 
         if (capacity() < new_size) {
             reserve(new_size);
         }
-        auto* tmp = compressed_.current;
-        compressed_.current = compressed_.data + new_size;
+        auto* tmp = p.current;
+        p.current = p.data + new_size;
 
-        std::uninitialized_value_construct_n(tmp, compressed_.current - tmp);
+        std::uninitialized_value_construct_n(tmp, p.current - tmp);
     }
 
     AL_CONSTEXPR_CXX20 void reserve(const size_type new_capacity) {
@@ -415,12 +488,15 @@ class ArrayList {
         }
 
         const auto len = size();
-        const auto old_ptr = compressed_.data;
+
+        auto& p = payload();
+
+        const auto old_ptr = p.data;
         raw_reserve(new_capacity);
         if (old_ptr) {
             if (cap > 0) {
                 if (len > 0) {
-                    std::uninitialized_move_n(old_ptr, len, compressed_.data);
+                    std::uninitialized_move_n(old_ptr, len, p.data);
                 }
                 destroy_range(old_ptr, old_ptr + len);
                 deallocate_target_ptr(old_ptr, cap);
@@ -430,79 +506,80 @@ class ArrayList {
 
     AL_NODISCARD constexpr auto operator[](const size_type index) noexcept
         -> reference {
-        return compressed_.data[index];
+        return payload().data[index];
     }
 
     AL_NODISCARD constexpr auto operator[](const size_type index) const noexcept
         -> const_reference {
-        return compressed_.data[index];
+        return payload().data[index];
     }
 
     AL_NODISCARD constexpr auto at(const size_type index) -> reference {
         ensure_in_range(index);
-        return compressed_.data[index];
+        return payload().data[index];
     }
 
     AL_NODISCARD constexpr auto at(const size_type index) const
         -> const_reference {
         ensure_in_range(index);
-        return compressed_.data[index];
+        return payload().data[index];
     }
 
     AL_NODISCARD constexpr auto capacity() const noexcept -> size_type {
-        return compressed_.end - compressed_.data;
+        auto& p = payload();
+        return p.end - p.data;
     }
 
     AL_NODISCARD constexpr auto data() noexcept -> pointer {
-        return compressed_.data;
+        return payload().data;
     }
 
     AL_NODISCARD constexpr auto data() const noexcept -> const_pointer {
-        return compressed_.data;
+        return payload().data;
     }
 
     AL_NODISCARD constexpr auto front() -> reference {
         ensure_not_empty();
-        return *compressed_.data;
+        return *payload().data;
     }
 
     AL_NODISCARD constexpr auto front() const -> const_reference {
         ensure_not_empty();
-        return *compressed_.data;
+        return *payload().data;
     }
 
     AL_NODISCARD constexpr auto back() -> reference {
         ensure_not_empty();
-        return *(compressed_.current - 1);
+        return *(payload().current - 1);
     }
 
     AL_NODISCARD constexpr auto back() const -> const_reference {
         ensure_not_empty();
-        return *(compressed_.current - 1);
+        return *(payload().current - 1);
     }
 
     AL_NODISCARD constexpr auto begin() noexcept -> iterator {
-        return iterator(compressed_.data);
+        return iterator(payload().data);
     }
 
     AL_NODISCARD constexpr auto end() noexcept -> iterator {
-        return iterator(compressed_.current);
+        return iterator(payload().current);
     }
 
     AL_NODISCARD constexpr auto begin() const noexcept -> const_iterator {
-        return const_iterator(compressed_.data);
+        return const_iterator(payload().data);
     }
 
     AL_NODISCARD constexpr auto end() const noexcept -> const_iterator {
-        return const_iterator(compressed_.current);
+        return const_iterator(payload().current);
     }
 
     AL_NODISCARD constexpr auto cbegin() const noexcept -> const_iterator {
-        return const_iterator(compressed_.data);
+        return const_iterator(payload().data);
     }
 
     AL_NODISCARD constexpr auto cend() const noexcept -> const_iterator {
-        return const_iterator(compressed_.current);
+        return const_iterator(payload().current);
     }
 
     AL_NODISCARD constexpr auto rbegin() noexcept -> reverse_iterator {
@@ -535,7 +612,8 @@ class ArrayList {
 
     AL_CONSTEXPR_CXX20 auto clear() noexcept -> void {
         destruct_all_elements();
-        compressed_.current = compressed_.data;
+        auto& p = payload();
+        p.current = p.data;
     }
 
     AL_CONSTEXPR_CXX20 auto erase(const_iterator position) -> iterator {
@@ -549,10 +627,10 @@ class ArrayList {
             throw std::out_of_range("Index out of range");
         }
         const auto length = size();
-        std::move(compressed_.data + index + 1, compressed_.data + length + 1,
-                  compressed_.data + index);
-        --compressed_.current;
-        return compressed_.data + index;
+        auto& p = payload();
+        std::move(p.data + index + 1, p.data + length + 1, p.data + index);
+        --p.current;
+        return p.data + index;
     }
 
    private:
@@ -594,9 +672,9 @@ class ArrayList {
 
     AL_CONSTEXPR_CXX20 void raw_reserve(const size_type capacity) {
         const auto length = size();
-        compressed_.data = AltyTraits::allocate(get_allocator(), capacity);
-        compressed_.current = compressed_.data + length;
-        compressed_.end = compressed_.data + capacity;
+        payload().data = AltyTraits::allocate(get_allocator(), capacity);
+        payload().current = payload().data + length;
+        payload().end = payload().data + capacity;
     }
 
     AL_CONSTEXPR_CXX20 void copy_safe(const ArrayList& other) {
@@ -609,19 +687,18 @@ class ArrayList {
 
     AL_CONSTEXPR_CXX20 void copy_unsafe(const ArrayList& other) {
         const auto length{other.size()};
-        compressed_.current = compressed_.data + length;
-        std::uninitialized_copy_n(other.compressed_.data, length,
-                                  compressed_.data);
+        payload().current = payload().data + length;
+        std::uninitialized_copy_n(other.payload().data, length, payload().data);
     }
 
     constexpr void ensure_in_range(const size_type index) const {
-        if (index >= size() or compressed_.data == nullptr) {
+        if (index >= size() or payload().data == nullptr) {
             throw std::out_of_range("Index out of range");
         }
     }
 
     constexpr void ensure_not_empty() const {
-        if (size() <= 0_UZ or compressed_.data == nullptr) {
+        if (size() <= 0_UZ or payload().data == nullptr) {
             throw std::out_of_range("ArrayList is empty");
         }
     }
@@ -669,16 +746,16 @@ class ArrayList {
 
     template <typename... Args>
     AL_CONSTEXPR_CXX20 auto emplace_at_back(Args&&... args) -> value_type& {
-        return raw_emplace_into(compressed_.current++,
+        return raw_emplace_into(payload().current++,
                                 std::forward<Args>(args)...);
     }
 
     AL_CONSTEXPR_CXX20 auto push_at_back(const Type& value) -> void {
-        raw_push_into(compressed_.current++, value);
+        raw_push_into(payload().current++, value);
     }
 
     AL_CONSTEXPR_CXX20 auto push_at_back(Type&& value) -> void {
-        raw_push_into(compressed_.current++, std::move(value));
+        raw_push_into(payload().current++, std::move(value));
     }
 
     AL_CONSTEXPR_CXX20 auto destroy_in_place(Type* value) noexcept -> void {
@@ -713,39 +790,31 @@ class ArrayList {
         swap(compressed_, other.compressed_);
     }
 
-    struct Compressed : private allocator_type {
-       public:
-        constexpr explicit Compressed(
-            pointer data, pointer end, pointer current,
-            const allocator_type& ally = allocator_type())
-            : allocator_type(ally), data(data), end(end), current(current) {}
+    struct Payload {
+        constexpr Payload() = default;
 
-        constexpr explicit Compressed(
-            pointer data, pointer end,
-            const allocator_type& ally = allocator_type())
-            : Compressed(data, end, data, ally) {}
+        constexpr explicit Payload(pointer data, pointer end, pointer current)
+            : data(data), end(end), current(current) {}
 
-        constexpr explicit Compressed(
-            pointer data, const allocator_type& ally = allocator_type())
-            : Compressed(data, data, data, ally) {}
+        constexpr explicit Payload(pointer data) : Payload(data, data, data) {}
 
-        constexpr Compressed() = default;
-
-        constexpr explicit Compressed(const allocator_type& ally)
-            : allocator_type(ally) {}
-
-        constexpr auto get_allocator() noexcept -> allocator_type& {
-            return static_cast<allocator_type&>(*this);
-        }
-
-        constexpr auto get_allocator() const noexcept -> const allocator_type& {
-            return static_cast<const allocator_type&>(*this);
-        }
+        constexpr explicit Payload(pointer data, pointer end)
+            : Payload(data, end, data) {}
 
         pointer data = nullptr;
         pointer end = nullptr;
         pointer current = nullptr;
     };
+
+    constexpr auto payload() noexcept -> Payload& {
+        return compressed_.get_second();
+    }
+
+    constexpr auto payload() const noexcept -> const Payload& {
+        return compressed_.get_second();
+    }
+
+    using Compressed = detail::CompressedPair<allocator_type, Payload>;
 
     Compressed compressed_;
 };
