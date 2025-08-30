@@ -641,13 +641,7 @@ class ArrayList {
         if (self.size() != that.size()) {
             return false;
         }
-        for (auto it = self.begin(), it2 = that.begin(); it != self.end();
-             ++it, ++it2) {
-            if (*it != *it2) {
-                return false;
-            }
-        }
-        return true;
+        return std::equal(self.begin(), self.end(), that.begin());
     }
 
     friend constexpr auto operator<(const ArrayList& self,
@@ -666,6 +660,21 @@ class ArrayList {
             return false;
         }
         return true;
+    }
+
+    friend constexpr auto operator>(const ArrayList& self,
+                                    const ArrayList& that) noexcept -> bool {
+        return that < self;
+    }
+
+    friend constexpr auto operator<=(const ArrayList& self,
+                                     const ArrayList& that) noexcept -> bool {
+        return !(self > that);
+    }
+
+    friend constexpr auto operator>=(const ArrayList& self,
+                                     const ArrayList& that) noexcept -> bool {
+        return !(self < that);
     }
 
     AL_CONSTEXPR_CXX20 void raw_reserve(const size_type capacity) {
