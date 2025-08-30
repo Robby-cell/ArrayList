@@ -633,11 +633,9 @@ class ArrayList {
         return p.data + index;
     }
 
-   private:
-    constexpr operator bool() const noexcept {  // NOLINT
-        return !empty();
-    }
+    constexpr explicit operator bool() const noexcept { return !empty(); }
 
+   private:
     friend constexpr auto operator==(const ArrayList& self,
                                      const ArrayList& that) noexcept -> bool {
         if (self.size() != that.size()) {
