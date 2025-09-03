@@ -2,33 +2,33 @@
 #define ARRAY_LIST_HPP
 
 #ifdef _MSVC_LANG
-#define CPP_DEF _MSVC_LANG
+#define AL_CPP_DEF _MSVC_LANG
 #else
-#define CPP_DEF __cplusplus
+#define AL_CPP_DEF __cplusplus
 #endif
 
-#define HAS_CXX20 (CPP_DEF >= 202002UL)
-#define HAS_CXX17 (CPP_DEF >= 201703UL)
-#define HAS_CXX14 (CPP_DEF >= 201402UL)
-#define HAS_CXX11 (CPP_DEF >= 201103UL)
+#define AL_HAS_CXX20 (AL_CPP_DEF >= 202002L)
+#define AL_HAS_CXX17 (AL_CPP_DEF >= 201703L)
+#define AL_HAS_CXX14 (AL_CPP_DEF >= 201402L)
+#define AL_HAS_CXX11 (AL_CPP_DEF >= 201103L)
 
-#if !HAS_CXX11
-#error "This library requires C++11 or higher"
+#if !AL_HAS_CXX11
+#error "This library AL_requires C++11 or higher"
 #endif
 
-#if HAS_CXX17
+#if AL_HAS_CXX17
 #define AL_CONSTEXPR_CXX17 constexpr
 #else
 #define AL_CONSTEXPR_CXX17
 #endif
 
-#if HAS_CXX20
+#if AL_HAS_CXX20
 #define AL_CONSTEXPR_CXX20 constexpr
 #else
 #define AL_CONSTEXPR_CXX20
 #endif
 
-#define HAS_CONCEPTS (__cpp_concepts >= 201907UL)
+#define AL_HAS_CONCEPTS (__cpp_concepts >= 201907UL)
 
 #include <algorithm>
 #include <cstring>
@@ -39,30 +39,30 @@
 #include <type_traits>
 #include <utility>
 
-#if HAS_CONCEPTS
+#if AL_HAS_CONCEPTS
 #include <concepts>  // IWYU pragma: keep
 #endif
 
-#if HAS_CONCEPTS
-#define CONSTRAINT(CONSTRAINT_NAME) CONSTRAINT_NAME
-#define REQUIRES(...) requires(__VA_ARGS__)
+#if AL_HAS_CONCEPTS
+#define AL_CONSTRAINT(CONSTRAINT_NAME) CONSTRAINT_NAME
+#define AL_REQUIRES(...) requires(__VA_ARGS__)
 #else
-#define CONSTRAINT(X) typename
-#define REQUIRES(...)
+#define AL_CONSTRAINT(X) typename
+#define AL_REQUIRES(...)
 #endif
 
 #if defined(_MSC_VER)
 #define AL_MSVC 1
 #define AL_CLANG 0
 #define AL_GCC 0
-#elif defined(__clang__)
-#define AL_CLANG 1
-#define AL_MSVC 0
-#define AL_GCC 0
 #elif defined(__GNUC__)
 #define AL_GCC 1
 #define AL_MSVC 0
 #define AL_CLANG 0
+#elif defined(__clang__)
+#define AL_CLANG 1
+#define AL_MSVC 0
+#define AL_GCC 0
 #else
 #define AL_GCC 0
 #define AL_MSVC 0
@@ -73,13 +73,13 @@ namespace al {
 
 #define AL_NODISCARD [[nodiscard]]
 
-#if HAS_CONCEPTS
+#if AL_HAS_CONCEPTS
 template <typename Container>
 concept IterableContainer = requires(Container c) {
     std::begin(c);
     std::end(c);
 };
-#endif  // ^^^ HAS_CONCEPTS
+#endif  // ^^^ AL_HAS_CONCEPTS
 
 constexpr auto operator""_UZ(const unsigned long long value) -> size_t {
     return static_cast<size_t>(value);
@@ -170,10 +170,10 @@ constexpr inline bool IsIteratorV =
 template <typename T>
 struct IsIterator : std::bool_constant<IsIteratorV<T>> {};
 
-#if HAS_CONCEPTS
+#if AL_HAS_CONCEPTS
 template <typename Type>
 concept Iterator = IsIteratorV<Type>;
-#endif  // ^^^ HAS_CONCEPTS
+#endif  // ^^^ AL_HAS_CONCEPTS
 
 template <class Iter, class WantedIter>
 constexpr inline bool IsIteratorCategory =
@@ -257,7 +257,7 @@ struct ArrayListDefaultGrowthDifference {
 };
 
 template <typename Type, typename Allocator = std::allocator<Type>>
-REQUIRES(std::is_object<Type>::value)
+AL_REQUIRES(std::is_object<Type>::value)
 class ArrayList {
     static_assert(
         std::is_same<Type, typename Allocator::value_type>::value,
@@ -323,7 +323,7 @@ class ArrayList {
     }
 
 // NOLINTBEGIN
-#if HAS_CONCEPTS
+#if AL_HAS_CONCEPTS
     template <typename Iter>
         requires(detail::IsRandomAccessIterator<Iter>)
 #else
@@ -344,7 +344,7 @@ class ArrayList {
         std::uninitialized_copy(first, last, p.data);
     }
 
-#if HAS_CONCEPTS
+#if AL_HAS_CONCEPTS
     template <typename Iter>
         requires(!detail::IsRandomAccessIterator<Iter>)
 #else
@@ -364,7 +364,7 @@ class ArrayList {
                                  const allocator_type& alloc = allocator_type())
         : ArrayList(list.begin(), list.end(), alloc) {}
 
-    template <CONSTRAINT(IterableContainer) Container>
+    template <AL_CONSTRAINT(IterableContainer) Container>
     AL_CONSTEXPR_CXX20 explicit ArrayList(
         const Container& container,
         const allocator_type& alloc = allocator_type())
@@ -410,7 +410,7 @@ class ArrayList {
         return p.data == p.current;
     }
 
-#if HAS_CONCEPTS
+#if AL_HAS_CONCEPTS
     template <typename Iter>
         requires(detail::IsIteratorV<Iter>)
 #else
@@ -456,12 +456,12 @@ class ArrayList {
         return p.current - p.data;
     }
 
-#if !HAS_CONCEPTS
+#if !AL_HAS_CONCEPTS
     template <typename std::enable_if<std::is_constructible<value_type>::value,
                                       int>::type = 0>
 #endif
     AL_CONSTEXPR_CXX20 void resize(const size_type new_size)
-#if HAS_CONCEPTS
+#if AL_HAS_CONCEPTS
         requires(std::is_constructible<value_type>::value)
 #endif
     {
@@ -469,7 +469,8 @@ class ArrayList {
         auto& p = payload();
 
         if (new_size < len) {
-            std::destroy_n(p.data + new_size, len - new_size);
+            detail::destroy_range<AltyTraits>(p.data + new_size, p.data + len,
+                                              get_allocator());
         }
 
         if (capacity() < new_size) {
@@ -735,14 +736,14 @@ class ArrayList {
     }
 
     template <typename... Args>
-    constexpr auto raw_emplace_into(value_type* const my_ptr,
-                                    Args&&... args) -> value_type& {
+    constexpr auto raw_emplace_into(value_type* const my_ptr, Args&&... args)
+        -> value_type& {
         new (my_ptr) value_type(std::forward<Args>(args)...);
         return *my_ptr;
     }
 
-    constexpr auto raw_push_into(value_type* const my_ptr,
-                                 const Type& value) -> void {
+    constexpr auto raw_push_into(value_type* const my_ptr, const Type& value)
+        -> void {
         new (my_ptr) value_type(value);
     }
 
@@ -771,8 +772,8 @@ class ArrayList {
     }
 
     template <typename It, typename Sentinel>
-    AL_CONSTEXPR_CXX20 auto destroy_range(It first,
-                                          Sentinel last) noexcept -> void {
+    AL_CONSTEXPR_CXX20 auto destroy_range(It first, Sentinel last) noexcept
+        -> void {
         detail::destroy_range<AltyTraits>(first, last, get_allocator());
     }
 
@@ -781,8 +782,9 @@ class ArrayList {
                                                   get_allocator());
     }
 
-    AL_CONSTEXPR_CXX20 auto deallocate_target_ptr(
-        value_type* const ptr, const size_type length) -> void {
+    AL_CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
+                                                  const size_type length)
+        -> void {
         if (ptr) {
             AltyTraits::deallocate(get_allocator(), ptr, length);
         }
