@@ -327,12 +327,13 @@ class ArrayList {
     template <typename Iter>
         requires(detail::IsRandomAccessIterator<Iter>)
 #else
-    template <typename Iter,
-              typename std::enable_if<detail::IsRandomAccessIterator<Iter>,
-                                      int>::type = 0>
+    template <typename Iter>
 #endif
-    AL_CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
-                                 const allocator_type& alloc = allocator_type())
+    AL_CONSTEXPR_CXX20 ArrayList(
+        Iter first, Iter last, const allocator_type& alloc = allocator_type(),
+        typename std::enable_if<detail::IsRandomAccessIterator<Iter>,
+                                std::true_type>::type /* */
+        = {})
         : compressed_(detail::First{}, alloc) {
         const auto length = static_cast<size_t>(std::distance(first, last));
         auto& p = payload();
@@ -348,12 +349,13 @@ class ArrayList {
     template <typename Iter>
         requires(!detail::IsRandomAccessIterator<Iter>)
 #else
-    template <typename Iter,
-              typename std::enable_if<!detail::IsRandomAccessIterator<Iter>,
-                                      int>::type = 0>
+    template <typename Iter>
 #endif
-    AL_CONSTEXPR_CXX20 ArrayList(Iter first, Iter last,
-                                 const allocator_type& alloc = allocator_type())
+    AL_CONSTEXPR_CXX20 ArrayList(
+        Iter first, Iter last, const allocator_type& alloc = allocator_type(),
+        typename std::enable_if<!detail::IsRandomAccessIterator<Iter>,
+                                std::false_type>::type /* */
+        = {})
         : compressed_(detail::First{}, alloc) {
         for (; first != last; ++first) {
             push_back(*first);
@@ -414,10 +416,12 @@ class ArrayList {
     template <typename Iter>
         requires(detail::IsIteratorV<Iter>)
 #else
-    template <typename Iter,
-              typename std::enable_if<detail::IsIteratorV<Iter>, int>::type = 0>
+    template <typename Iter>
 #endif
-    constexpr auto push_back(Iter first, Iter last) -> void {
+    constexpr auto push_back(Iter first, Iter last,
+                             typename std::enable_if<detail::IsIteratorV<Iter>,
+                                                     std::true_type>::type /* */
+                             = {}) -> void {
         const auto length = std::distance(first, last);
         ensure_size_for_elements(length);
 
@@ -736,14 +740,14 @@ class ArrayList {
     }
 
     template <typename... Args>
-    constexpr auto raw_emplace_into(value_type* const my_ptr, Args&&... args)
-        -> value_type& {
+    constexpr auto raw_emplace_into(value_type* const my_ptr,
+                                    Args&&... args) -> value_type& {
         new (my_ptr) value_type(std::forward<Args>(args)...);
         return *my_ptr;
     }
 
-    constexpr auto raw_push_into(value_type* const my_ptr, const Type& value)
-        -> void {
+    constexpr auto raw_push_into(value_type* const my_ptr,
+                                 const Type& value) -> void {
         new (my_ptr) value_type(value);
     }
 
@@ -772,8 +776,8 @@ class ArrayList {
     }
 
     template <typename It, typename Sentinel>
-    AL_CONSTEXPR_CXX20 auto destroy_range(It first, Sentinel last) noexcept
-        -> void {
+    AL_CONSTEXPR_CXX20 auto destroy_range(It first,
+                                          Sentinel last) noexcept -> void {
         detail::destroy_range<AltyTraits>(first, last, get_allocator());
     }
 
@@ -782,9 +786,8 @@ class ArrayList {
                                                   get_allocator());
     }
 
-    AL_CONSTEXPR_CXX20 auto deallocate_target_ptr(value_type* const ptr,
-                                                  const size_type length)
-        -> void {
+    AL_CONSTEXPR_CXX20 auto deallocate_target_ptr(
+        value_type* const ptr, const size_type length) -> void {
         if (ptr) {
             AltyTraits::deallocate(get_allocator(), ptr, length);
         }
